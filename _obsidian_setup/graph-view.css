@@ -1,0 +1,49 @@
+/* ============================================================
+   GRAPH VIEW — Trading Project
+   Adaptat pentru 3 logs (Sabin, Stefan, Nicolas) + Research
+   ============================================================ */
+
+/* === DARK MODE === */
+.theme-dark {
+    /* Default nodes — dark, monotonous, lets groups pop */
+    --graph-node: #3a3a3a;
+    --graph-node-focused: #ffffff;
+    --graph-node-unresolved: #2a2a2a;
+    --graph-node-tag: #666;
+    --graph-node-attachment: #444;
+
+    /* Edges — near invisible, groups do the talking */
+    --graph-line: #252530;
+    --graph-line-highlight: #ffffff;
+    --graph-arrow: #3a3a3a;
+
+    /* Text */
+    --graph-text: #777;
+}
+
+/* === LIGHT MODE === */
+.theme-light {
+    --graph-node: #ccc;
+    --graph-node-focused: #333;
+    --graph-node-unresolved: #ddd;
+    --graph-node-tag: #999;
+    --graph-node-attachment: #bbb;
+
+    --graph-line: #e0e0e0;
+    --graph-line-highlight: #333;
+    --graph-arrow: #ccc;
+
+    --graph-text: #999;
+}
+
+/* === APPLY === */
+.graph-view.color-fill              { color: var(--graph-node); }
+.graph-view.color-fill-focused      { color: var(--graph-node-focused); }
+.graph-view.color-fill-unresolved   { color: var(--graph-node-unresolved); opacity: 0.3; }
+.graph-view.color-fill-tag          { color: var(--graph-node-tag); }
+.graph-view.color-fill-attachment   { color: var(--graph-node-attachment); }
+.graph-view.color-line              { color: var(--graph-line); }
+.graph-view.color-line-highlight    { color: var(--graph-line-highlight); }
+.graph-view.color-arrow             { color: var(--graph-arrow); }
+.graph-view.color-text              { color: var(--graph-text); }
+.graph-view                         { background-color: var(--background-primary); }

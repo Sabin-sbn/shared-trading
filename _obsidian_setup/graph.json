@@ -1,0 +1,65 @@
+{
+  "collapse-filter": false,
+  "search": "",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": true,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:Research",
+      "color": {
+        "a": 1,
+        "rgb": 16766720
+      }
+    },
+    {
+      "query": "path:Stefan_Logs",
+      "color": {
+        "a": 1,
+        "rgb": 4492031
+      }
+    },
+    {
+      "query": "path:Sabin_Logs",
+      "color": {
+        "a": 1,
+        "rgb": 16728193
+      }
+    },
+    {
+      "query": "path:Nicolas_Logs",
+      "color": {
+        "a": 1,
+        "rgb": 65535
+      }
+    },
+    {
+      "query": "tag:#todo OR tag:#in-progress",
+      "color": {
+        "a": 1,
+        "rgb": 16717636
+      }
+    },
+    {
+      "query": "tag:#crypto OR tag:#forex OR tag:#stocks",
+      "color": {
+        "a": 1,
+        "rgb": 16732754
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": false,
+  "textFadeMultiplier": 0.2,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": false,
+  "centerStrength": 0.25,
+  "repelStrength": 12,
+  "linkStrength": 0.7,
+  "linkDistance": 180,
+  "scale": 0.05,
+  "close": true
+}

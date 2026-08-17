@@ -1,0 +1,28 @@
+# Obsidian
+.obsidian/
+.obsidian/**
+.trash/
+.DS_Store
+
+# Fisiere mari (video, imagini, arhive)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.zip
+*.rar
+*.7z
+*.psd
+*.ai
+*.sketch
+
+# Temporare
+*.tmp
+*.bak
+~$*
+Thumbs.db
+desktop.ini
+
+# AI tools
+.claude/
+.opencode/
