@@ -36,7 +36,8 @@ Chat async prin Git. Mesajele se vad dupa sync (dublu-clic pe `sync.bat`).
   2. Clone: `git clone https://github.com/Sabin-sbn/shared-trading.git`
   3. Set git identity: `git config --global user.name "Stefan"` (sau "Nicolas")
   4. `git config --global user.email "emailul@users.noreply.github.com"`
-  5. Dublu-clic pe `sync.bat` la fiecare sesiune
+  5. Dublu-clic pe `START.bat` — deschide Chat.md direct în Obsidian
+  6. Dublu-clic pe `sync.bat` — sincronizează (pull + commit + push)
 
   **Reguli de aur (ca la Clippings):**
   - Fiecare scrie doar în folderul lui de Logs
