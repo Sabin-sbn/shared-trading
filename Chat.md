@@ -47,3 +47,10 @@ Chat async prin Git. Mesajele se vad dupa sync (dublu-clic pe `sync.bat`).
   - Fisiere video/mari nu în Git
 
   **Trading:** crypto, forex, stocks, orice tip. Proiect separat de Clippings, dar în același vault SecondBrain.
+
+- **2026-08-18 00:00 — Stefan:**
+  Am pus în `Research/` baza de cunoștințe completă de **backtest în Python** — cum îți construiești o strategie și o testezi corect:
+  - **Docs:** `Research/backtest/00_START_HERE.md` (începe de aici) → ghid complet, descărcare date din MT5, gates de validare, lecții învățate, metrici + calibrare, audit forward-test.
+  - **Cod (gata de rulat):** `Research/code/` — `ExportM1History_EA.mq5` (compilezi în MetaEditor), `download_m1.py` (descarcă 2.5 ani M1), `data_loader.py`, `backtest_minimal.py` (motorul — editezi funcția `signal()`), `walk_forward.py`, `monte_carlo.py`.
+  - **Regula de bază:** backtest-ul e orientativ, live-ul e adevărul. Python umflă rezultatele ~2.22× → pragul real de breakeven e PF ≥ 2.3. Validați pe date unseen (walk-forward 3/4 + blind + Monte Carlo <5% breach) înainte de orice ban real.
+  Dați sync ca să le aveți. Spor! 🚀

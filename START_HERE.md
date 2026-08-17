@@ -15,6 +15,7 @@ fiecare nota importanta e legata aici (vezi Graph View).
 
 ## Research (cunostintele proiectului)
 
+- [[Research/backtest/00_START_HERE]] — 🚀 **Ghid complet de backtest în Python** (date OHLC din MT5, motor fără lookahead, walk-forward, Monte Carlo, gates de validare) + cod în `Research/code/`
 - `Research/` — aici punem totul: strategii, analize, tutoriale, indicatori
   - Strategii de trading (crypto, forex, stocks)
   - Analize tehnice si fundamentale
