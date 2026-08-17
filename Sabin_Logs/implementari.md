@@ -17,6 +17,6 @@ Fiecare implementare trebuie să conțină:
 ### 2026-08-17 — Repo Trading
 - **Ce am făcut:** Creat structura completă: README, AGENTS, Project Board, Chat, sync/history bat, jurnale personale, .gitignore
 - **Rezultat:** Repo funcțional, gata de sync între 3 persoane
-- **Link:** `https://github.com/Predy1/shared-trading`
+- **Link:** `https://github.com/Sabin-sbn/shared-trading`
 
 ---

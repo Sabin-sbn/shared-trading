@@ -58,8 +58,8 @@ Orice altceva din repository e COMUN si poate fi modificat de toti trei
 
 ## Informatii Git
 
-- Remote: `git@github.com:Predy1/shared-trading.git` (SSH)
-  sau `https://github.com/Predy1/shared-trading.git` (HTTPS)
+- Remote: `git@github.com:Sabin-sbn/shared-trading.git` (SSH)
+  sau `https://github.com/Sabin-sbn/shared-trading.git` (HTTPS)
 - Branch principal: `main`
 - Repo-ul e un "nested repo": se afla fizic in interiorul seifurilor Obsidian
   personale, dar fiecare seif personal il IGNORA in git-ul lui (privacy garantata).
