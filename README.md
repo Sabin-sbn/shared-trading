@@ -10,7 +10,8 @@ Proiect comun de trading: crypto, forex, stocks și orice tip de trading.
 - `Research/` — note de research comune (toți 3 pot adăuga)
 - `Project_Board.md` — tabloul de sarcini comun (cine editează ce, status)
 - `Chat.md` — discuțiile voastre (chat async)
-- `sync.bat` — dublu-clic pentru sincronizare (pull + commit + push)
+- `START.bat` — dublu-clic pentru a deschide Chat.md direct în Obsidian (cu sync automat)
+- `sync.bat` — dublu-clic pentru sincronizare (pull + commit + push + deschide folderul)
 - `history.bat` — dublu-clic pentru istoric (cine a modificat ce și când)
 
 ## Reguli de aur

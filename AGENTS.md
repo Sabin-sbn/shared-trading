@@ -21,6 +21,7 @@ Trei persoane, trei PC-uri diferite, un singur repository Git partajat.
 - `Chat.md` — chat async intre cei trei (doar adaugare de mesaje la final).
 - `Research/` — note de research COMUNE (strategii, analize, tutoriale, indicatori).
   TOTI pot adauga aici (cu sync inainte + sync dupa).
+- `START.bat` — dublu-clic pentru a deschide Chat.md in Obsidian (cu sync automat).
 - `sync.bat` — scriptul de sincronizare (git pull + commit + push cu dublu-clic).
 - `history.bat` — scriptul de audit (arata cine a modificat ce si cand).
 

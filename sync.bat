@@ -15,6 +15,15 @@ echo [3/3] Push (urc modificarile tale)...
 git push origin main || (echo [EROARE] Push esuat! Verifica conexiunea. & pause & exit /b 1)
 echo.
 echo ========================================
-echo   Sincronizare reusita! Te poti inchide.
+echo   Sincronizare reusita!
+echo ========================================
+echo.
+echo Deschid folderul Trading...
+explorer "%~dp0"
+echo.
+echo ========================================
+echo   GATA! Poti inchide aceasta fereastra.
+echo   Fa dublu-clic pe START.bat pentru
+echo   Chat + Obsidian.
 echo ========================================
 pause

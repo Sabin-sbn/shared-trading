@@ -1,8 +1,8 @@
 @echo off
 cd /d "%~dp0"
-echo ================================================
+echo ========================================
 echo   AUDIT: cine a modificat ce si cand
-echo ================================================
+echo ========================================
 echo.
 echo --- Cine esti tu in git (cum apare in istoric) ---
 git config user.name
