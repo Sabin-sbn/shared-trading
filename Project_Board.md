@@ -7,10 +7,11 @@
 | ID | Subiect | Responsabil | Status | Deadline | Notițe |
 | --- | --- | --- | --- | --- | --- |
 | #001 | Setup repo + Obsidian | Sabin | 🟢 Finalizat | | |
-| #002 | Strategii de trading — research inițial | Toți | 🔴 Planificat | | |
-| #003 | Platforme de trading — comparativ | Toți | 🔴 Planificat | | |
-| #004 | Managementul riscului — reguli | Toți | 🔴 Planificat | | |
-| #005 | Primul plan de tranzacționare | Toți | 🔴 Planificat | | |
+| #002 | Strategia No Wick (Omar Nowick) — analiză completă | Sabin | ✅ Implementat | | Vezi [[Research/Strategia_NoWick_OmarNowick_Analiza_Completa]] |
+| #003 | Backtest No Wick: 100 trade-uri USDCHF + GBPUSD 15min | Toți | 🔴 Planificat | | Folosiți [[Research/NoWick_Cheat_Sheet]] |
+| #004 | Instalat indicatorii TradingView (omarnowick + X Ghost) | Toți | 🔴 Planificat | | Feed OANDA obligatoriu |
+| #005 | Managementul riscului — reguli comune | Toți | 🔴 Planificat | | Model: 1% fix, RR 1:1 |
+| #006 | Primul plan de tranzacționare | Toți | 🔴 Planificat | | |
 
 **Status:** 🔴 Planificat → 🟡 În lucru → 🟢 Finalizat → ✅ Implementat
 

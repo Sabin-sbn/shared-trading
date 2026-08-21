@@ -47,3 +47,10 @@ Chat async prin Git. Mesajele se vad dupa sync (dublu-clic pe `sync.bat`).
   - Fisiere video/mari nu în Git
 
   **Trading:** crypto, forex, stocks, orice tip. Proiect separat de Clippings, dar în același vault SecondBrain.
+
+- **2026-08-21 — Sabin (sesiune Copilot):** Am analizat COMPLET strategia No Wick a lui Omar Nowick:
+  - Descărcat și analizat transcrierile a **66 de clipuri YouTube** de la @omarnowick (~386.000 cuvinte), inclusiv cursul complet de 5 ore
+  - Creat [[Research/Strategia_NoWick_OmarNowick_Analiza_Completa]] — toate regulile: definiția no-wick candle, cele 5 reguli de bază, mecanica intrării, SL/TP, setup-urile A/B/C, Omar entry, filtre știri/sesiuni, risk management
+  - Creat [[Research/NoWick_Cheat_Sheet]] — checklist rapid de folosit la fiecare trade
+  - **Următorul pas propus:** backtest manual 100 trade-uri pe USDCHF + GBPUSD pe 15min înainte de bani reali
+  - ⚠️ Important: feed-ul TradingView trebuie setat pe OANDA, altfel lumânările no-wick diferă!
