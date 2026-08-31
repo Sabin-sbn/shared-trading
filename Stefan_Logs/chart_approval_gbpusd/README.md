@@ -1,102 +1,91 @@
-# 📊 GBPUSD — Visual Approval Chart + Pipeline
+# 📊 GBPUSD — Visual Approval Chart + Pipeline (TEMPLATE)
 
 > Instrument vizual de **aprobare a strategiilor** NO-Wick pe GBPUSD, perechea noastră principală.
-> Tot echipa (Stefan / Sabin / Nicolas) poate deschide chart-ul, desena setup-uri și da verdict
-> TAKE/SKIP — apoi analizăm obiectiv markerii. Pune aici **aprobarea ta vizuală la strategii diferite**.
+> Acesta e un **template funcțional, fără date** — fiecare membru (Stefan / Sabin / Nicolas) își pune
+> **datele lui** de chart și își vizualizează **tranzacțiile lui custom** direct pe chart.
 
-> ℹ️ **Actualizat 01 Sep 2026:** am înlocuit varianta „GBPUSD 2026" cu chart-ul **normal** `gbpusd_draw.html`
-> (cel mai actual, fără datele 2025-2026 complete care dădeau probleme). Pipeline-ul folosește acum
-> doar fereastra **Mai – Iul 2026**, exact perioada reală de forward-test.
+> ℹ️ **Template neutru (actualizat 01 Sep 2026):** am scos toate datele reale (OHLC, CSV, profile, tranzacții).
+> A rămas doar codul funcțional + pipeline-ul. Fiecare își completează cu propria sursă de date.
 
-## ⚡ Cum deschizi chart-ul (2 secunde)
+## 🔧 Cum îți pui DATELE TALE (pași, o singură dată)
 
-Deschide `gbpusd_draw.html` **direct în browser** (dublu-clic). Merge pe `file://` din Chrome/Edge.
-Dacă stocarea locală e blocată (Firefox pe file://), folosește „Export JSON" când termini și încarcă-l după.
+Chart-ul e generat din datele tale. Rulezi `build_chart_html.py` pe fișierul tău CSV și îți apare
+propriul chart încărcat cu datele tale.
 
-Chart-ul încarcă datele singur din `gbpusd_ohlc.json` (M15 + M1).
-**Nicio instalare, doar browser.**
+### 1. Pregătește datele tale (CSV, format OHLC)
+Creează un CSV `gbpusd_pro_m15_<perioada>.csv` cu coloanele:
+`time,open,high,low,close,tick_volume` (time = timestamp Unix secunde).
+Poți avea și `gbpusd_pro_m1_<perioada>.csv` (M1) — dacă lipsește, chart-ul merge doar pe M15.
 
-### Comenzi de bază
-- `V` select / `B` LONG / `S` SHORT / `L` linie / `P` pen / `R` zonă / `H` h-linie / `N` notă
-- Shift+drag = măsură în pips · Scroll = zoom la cursor · tastele `+1/+10/+60` dezvăluie viitorul (Lookahead OFF by default)
-- Butonul „👻 Ghost" pune LONG/SHORT pe semnalele No-Wick din zona vizibilă (referință AI)
-- Butonul „🤖 Bot" = backtest cu config-ul botului pe tot istoricul
-- Butonul „Raport" = finalizează sesiunea (TAKE vs SKIP, WIN/LOSS, filtre)
+### 2. Editează `build_chart_html.py` (2 linii)
+Deschide scriptul și schimbă aceste două căi cu numele fișierelor tale:
+```python
+SRC = os.path.join(HERE, "gbpusd_pro_m15_2016-05_07.csv")   # ← fișierul tău M15
+SRC_M1 = os.path.join(HERE, "gbpusd_pro_m1_2016-05_07.csv") # ← fișierul tău M1 (opțional)
+```
 
-### Perioada
-GBPUSD.pro · M15 · **01 Mai – 31 Iul 2026** (perioada în care avem date reale de forward-test).
-
----
-
-## 🎯 Cum folosești pentru VISUAL APPROVAL (hibrid uman-bot)
-
-Asta e **calea de fund a proiectului** (singura cu PF real dovedit). Ideea:
-
-1. **Desenezi un setup** (LONG/SHORT) când *tu* ai vedea o intrare No-Wick validă, cu SL/TP.
-2. În panoul adnotării (v7.57) alegi **PASS / SKIP + motiv** — fix, nu liber:
-   - **PASS** = aș intra pe setup-ul ăsta (edge vizual clar)
-   - **SKIP** = aș sări, dar e aproape / ex. filtru de zi/oră (zi/lună/weekend, sesiune slabă, news)
-3. La final apeși **Export JSON** → salvezi fișierul.
-4. Rulezi `analyze_markers.py` pe JSON → primești features + outcome (win/loss la RR1 în 12h).
-
-**Țintă: 100+ adnotări** înainte să tragem concluzii statistice (la <30 = zgomot).
-
-### Ce fac datele pe care le aduni
-- `analyze_markers.py` extrage per-marker: tip candelă/body, potrivire No-Wick, sesiune UTC (bucket), zi, distanța la swing 50, break de structură, trend EMA, + outcome (MFE/MAE, win/loss/ambiguous la RR1 în 12h).
-- Le combinăm cu filtrele cunoscute (zi/oră/sesiune) → ipoteze de nivel fin per-trade → **biblioteca de filtre** (Goal 1 din plan).
-
-> Notă (onest): desenele sunt **outcome-visible** (desenezi și vezi ce a urmat). Analyze_markers.py e pentru
-> **feedback și feature-mining**, NU pentru validare pură. Test/retest blind se face separat (Partea B).
-
----
-
-## 🔧 Pipeline de rulare (pentru dev / regenerare)
-
-Toate scripturile folosesc căi relative la folderul propriu (`os.path.dirname(__file__)`), deci merg din
-orice loc, cât timp fișierele stau împreună.
-
-### 1. Regenerare chart HTML (după ce editezi cod/date)
+### 3. Rulează generatorul
 ```powershell
 cd Stefan_Logs/chart_approval_gbpusd
 python build_chart_html.py
 ```
-→ rescrie `gbpusd_draw.html` din `gbpusd_pro_m15_2026-05_07.csv` (M15) + `gbpusd_pro_m1_2026-05_07.csv` (M1).
-Apoi regenerează `gbpusd_ohlc.json` / `gbpusd_ohlc.js` (datele separate încărcate de chart).
+→ generează în același folder: `gbpusd_draw.html` + `gbpusd_ohlc.json` + `gbpusd_ohlc.js`.
 
-### 2. Analiza markerilor desenați (după ce toți au exportat JSON)
+### 4. Deschide chart-ul
+Deschide `gbpusd_draw.html` **direct în browser** (dublu-clic). Merge pe `file://` din Chrome/Edge.
+Chart-ul încarcă singur datele tale din `gbpusd_ohlc.json` (sau `.js` ca fallback pentru `file://`).
+
+---
+
+## 🎯 Vizualizează-ți TRANZACȚIILE CUSTOM pe chart
+
+După ce ai chart-ul cu datele tale, poți desena și marca orice:
+- `V` select / `B` LONG / `S` SHORT / `L` linie / `P` pen / `R` zonă / `H` h-linie / `N` notă
+- Shift+drag = măsură în pips · Scroll = zoom la cursor · `+1/+10/+60` dezvăluie viitorul (Lookahead OFF)
+- Butonul „👻 Ghost" pune LONG/SHORT pe semnalele No-Wick din zona vizibilă (referință AI)
+- Butonul „🤖 Bot" = backtest cu config-ul botului pe tot istoricul
+- Butonul „Raport" = finalizează sesiunea (TAKE vs SKIP, WIN/LOSS, filtre)
+- **Export JSON** / **Import JSON** — îți salvezi/încarci desenele și tranzacțiile tale în protocol propriu.
+
+**Tranzacțiile tale custom** (PASS/SKIP + motiv) se salvează în JSON și pot fi analizate.
+
+---
+
+## 📈 Analiza desenelor și tranzacțiilor tale
+
+După ce desenezi, exportă JSON-ul și rulezi:
 ```powershell
-python analyze_markers.py gbpusd_markers_stefan.json
-python analyze_markers.py gbpusd_markers_sabin.json
-...
+python analyze_markers.py gbpusd_markers_<numele_tau>.json
 ```
-→ scrie `marker_analysis.csv` + raport pe stdout (No-Wick match, sesiune v2 OK %, outcome RR1).
-Fiecare membru exportă JSON-ul lui; îi analizăm separat ca să comparăm **acordul inter-rater**.
+→ scrie `marker_analysis.csv` + raport pe stdout (No-Wick match, sesiune, outcome RR1).
+Fiecare membru exportă JSON-ul lui; îi analizăm separat ca să comparăm **acordul inter-rater**
+(fiecare își vizualizează și își pune propriile date/decizii).
 
 ---
 
-## 📁 Conținutul folderului
+## 📁 Conținutul folderului (stare template)
 
-| Fișier | Ce e | Necesar la deschidere? |
+| Fișier | Ce e | Necesar? |
 |---|---|---|
-| `gbpusd_draw.html` | chart-ul interactiv | da (deschizi ăsta) |
-| `gbpusd_ohlc.json` | datele M15+M1, self-contained | da (încărcat automat) |
-| `gbpusd_ohlc.js` | aceleași date (fallback pentru `file://`) | da (fallback) |
-| `build_chart_html.py` | generatorul HTML + datele OHLC | nu (doar regenerare) |
-| `analyze_markers.py` | analiza markerilor desenați | nu (rulezi după export) |
-| `gbpusd_pro_m15_2026-05_07.csv` | datele M15 Mai–Iul 2026 (sursa build + analyze) | nu (doar regenerare) |
-| `gbpusd_pro_m1_2026-05_07.csv` | datele M1 Mai–Iul 2026 (sursa build) | nu (doar regenerare) |
-| `profiles/gbpusd_draw.profile.json` | profilul default (markeri goi, settings) | nu (fallback) |
+| `build_chart_html.py` | generatorul chart-ului + datelor OHLC din CSV | da (îți faci propriul chart) |
+| `analyze_markers.py` | analiza markerilor/tranzacțiilor desenați | da (după export) |
+| `README.md` | acest ghid | da |
+| `gbpusd_draw.html` | chart-ul final — **generat de tine cu datele tale** | da (după rulare build) |
+| `gbpusd_ohlc.json` / `.js` | datele tale compilate — generate de build | da (după rulare build) |
+| `profiles/` | aici îți pui profilul tău (JSON cu desene/tranzacții) | opțional |
+
+> ⚠️ Charter-ul `.html`, OHLC-ul și CSV-urile **NU sunt incluse** (sunt datele fiecăruia).
+> Pe GitHub rămâne doar codul — fiecare își completează local.
 
 ---
 
-## ⚠️ Reguli de echipă (ca să nu stricăm treaba)
+## ⚠️ Reguli de echipă
 
-1. **Fiecare adnotează doar pe profilul lui** (export/import JSON la nevoie) — nu suprascrie fișierele altora.
-2. **Nu edita `gbpusd_ohlc.json`** (e datele brute) — dacă vrei altă perioadă, regenerează.
-3. **Nu regenerezi `build_chart_html.py` decât dacă schimbi cod/date** — chart-ul funcțional e deja compilat.
-4. Când aduni adnotări: **outcome-visible e ok pentru feature-mining**, validatezi separat blind.
-5. Commit doar `*.json` exportați + eventual profile/date noi, NU suprascrie HTML-ul altuia.
+1. **Nu suprascrie datele/profilul altuia** — fiecare are propriul CSV/OHLC/profil, în propriul folder.
+2. **Nu edita `gbpusd_draw.html` / `gbpusd_ohlc.json` direct** — regenerează din propriul CSV cu `build_chart_html.py`.
+3. Commit pe repo doar **cod + README**, NU datele reale de piață (CSV-uri mari, OHLC, tranzacții).
+4. Dacă vrei să-ți împărtășești o analiză, salvezi ca `Stefan_Logs/` sau `Nicolas_Logs/` (rezumat), nu datele brute.
 
 ---
 
-*Parte din `shared-trading`. Chart + pipeline exportate din SecondBrain (vault), folder `nowick-strat-clean/_charts/`.*
+*Template funcțional. Parte din `shared-trading` — fiecare membru își vizualizează propriile date de chart și tranzacții.*
