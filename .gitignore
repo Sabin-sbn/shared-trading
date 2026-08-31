@@ -26,3 +26,7 @@ desktop.ini
 # AI tools
 .claude/
 .opencode/
+
+# Python
+__pycache__/
+*.pyc
