@@ -1,27 +1,424 @@
+#!/usr/bin/env python3
+"""Construieste _charts/gbpusd_draw.html — Mini-TradingView local cu date GBPUSD.pro M15.
+v4 (06 Aug 2026): fix blank-chart (ResizeObserver), SL/TP in dialog, DRAWING SYSTEM
+(linie / zona / h-line) exportat cu axe X(bar/ts)+Y(price), tools toolbar."""
+import csv, os, json
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SRC = os.path.join(HERE, "gbpusd_pro_m15_2026-05_07.csv")
+SRC_M1 = os.path.join(HERE, "gbpusd_pro_m1_2026-05_07.csv")
+OUT = os.path.join(HERE, "gbpusd_draw.html")
+
+rows = []
+with open(SRC, newline="") as f:
+    for r in csv.DictReader(f):
+        rows.append([int(r["time"]), float(r["open"]), float(r["high"]),
+                     float(r["low"]), float(r["close"]), int(r["tick_volume"])])
+
+rows_m1 = []
+if os.path.exists(SRC_M1):
+    with open(SRC_M1, newline="") as f:
+        for r in csv.DictReader(f):
+            rows_m1.append([int(r["time"]), float(r["open"]), float(r["high"]),
+                            float(r["low"]), float(r["close"]), int(r["tick_volume"])])
+
+data_js = json.dumps(rows, separators=(",", ":"))
+data_m1_js = json.dumps(rows_m1, separators=(",", ":")) if rows_m1 else "[]"
+
+HTML = r"""<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<title>Mini-TradingView — GBPUSD.pro M15 (Mai-Iul 2026)</title>
+<style>
+  :root { --bg:#131722; --grid:#232833; --panel:#1e222d; --text:#d1d4dc;
+          --up:#26a69a; --down:#ef5350; --accent:#2962ff; --line:#2a2e39; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; background:var(--bg); color:var(--text);
+              font-family:'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; overflow:hidden; }
+  #wrap { display:flex; height:100%; }
+  #chartBox { flex:1; position:relative; min-width:0; border-left:1px solid var(--line); }
+  #strip { position:absolute; top:0; left:0; right:0; height:6px; background:#e53935; z-index:6; }
+  canvas { display:block; width:100%; height:100%; cursor:crosshair; user-select:none; }
+  #pricebar { position:absolute; top:0; right:0; bottom:0; width:52px; z-index:6;
+              background:rgba(19,23,34,0.4); border-left:1px solid var(--line); cursor:ns-resize; }
+  #pricebar:hover { background:rgba(30,34,45,0.65); }
+  #pbtag { position:absolute; top:8px; right:2px; left:2px; text-align:center;
+           font-size:11px; font-weight:700; color:#fff; background:var(--accent);
+           border-radius:5px; padding:2px 0; pointer-events:none; z-index:8;
+           transition:top .08s ease-out; }
+  .pblabel { position:absolute; right:3px; left:3px; text-align:center;
+             font:bold 9px Segoe UI, Arial, sans-serif; padding:1px 2px; border-radius:3px;
+             pointer-events:none; white-space:nowrap; z-index:7;
+             transform:translateY(-50%); }
+  .pblabel.entry { color:#ffa726; background:rgba(255,167,38,0.18); border:1px solid rgba(255,167,38,0.35); }
+  .pblabel.sl    { color:#ff5252; background:rgba(255,82,82,0.18);   border:1px solid rgba(255,82,82,0.35); }
+  .pblabel.tp    { color:#4caf50; background:rgba(76,175,80,0.18);   border:1px solid rgba(76,175,80,0.35); }
+  #status { position:absolute; top:8px; right:62px; background:rgba(30,34,45,0.85);
+            border:1px solid var(--line); border-radius:6px; padding:4px 10px;
+            font-size:11px; color:#9aa0ab; pointer-events:none; z-index:5;
+            max-width:calc(100% - 130px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #status b { color:#fff; font-weight:600; }
+  #sidebar { width:330px; background:var(--panel); border-left:1px solid var(--line);
+             display:flex; flex-direction:column; transition:width .18s ease;   /* FIX P4: slide smooth la collapse */
+             user-select:none; -webkit-user-select:none; }   /* FIX: click+drag accidental pe bara din dreapta nu mai selecteaza text (lista desene/indicatori) */
+  #sidebar.collapsed { width:0; border-left:none; overflow:hidden; }   /* FIX P4: colapsat — continutul nu „sare" afara vizual */
+  #sidebar input, #sidebar textarea, #sidebar select { user-select:text; -webkit-user-select:text; }   /* campurile editabile raman normale */
+  #shead { padding:10px 12px; border-bottom:1px solid var(--line); font-size:13px; }
+  #shead b { color:#fff; }
+  #shead .hint { font-size:11px; color:#787b86; margin-top:4px; line-height:1.5; }
+  #banner { display:none; margin-top:6px; background:#3d2626; border:1px solid #8a4a4a;
+            color:#ffb4b4; border-radius:6px; padding:6px 8px; font-size:11px; line-height:1.4; }
+  #toolbar { padding:8px 10px; border-bottom:1px solid var(--line); display:flex; gap:5px; flex-wrap:wrap; }
+  #toolbar button { background:#363a45; border:none; color:var(--text); border-radius:6px;
+        padding:5px 8px; font-size:11px; cursor:pointer; transition:background .12s; }
+  #toolbar button:hover { background:#4c525e; }
+  #toolbar button.on { background:var(--accent); color:#fff; }
+  #list { flex:1; overflow-y:auto; padding:6px; }
+  #list::-webkit-scrollbar { width:8px; } #list::-webkit-scrollbar-thumb { background:#3a3e49; border-radius:4px; }
+  .sechead { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:0.4px;
+    color:#d1d4dc; background:rgba(255,255,255,0.04); border-top:1px solid var(--line); border-radius:4px;
+    padding:6px 8px; margin:8px 0 6px; text-transform:uppercase; }
+  .sechead:first-of-type { margin-top:0; }
+  .sechead .cnt { margin-left:auto; font-weight:600; color:#787b86; background:rgba(255,255,255,0.06);
+    border-radius:8px; padding:0 6px; font-size:10px; line-height:16px; }
+  .mk { background:#262a35; border-radius:8px; padding:8px; margin-bottom:6px;
+        border-left:3px solid var(--up); font-size:12px; transition:background .15s; }
+  .mk:hover { background:#2d3240; }
+  .mk.sel { outline:2px solid #4fc3f7; box-shadow:0 0 0 1px #4fc3f7, 0 4px 14px rgba(79,195,247,0.25); background:#1d2b3a; }   /* selectat pe chart => evidențiat și în listă (nu-l mai cauți după ID) */
+  .mk.ghost { background:rgba(245,197,66,0.06); border-left:3px solid #f5c542; box-shadow:inset 0 0 0 1px rgba(245,197,66,0.25); }
+  .mk.ghost:hover { background:rgba(245,197,66,0.10); }
+  .mk.sell { border-left-color:var(--down); }
+  .mk .inote { width:100%; box-sizing:border-box; background:#131722; color:var(--text); border:1px solid var(--line);
+               border-radius:5px; padding:4px 6px; font-size:11px; margin-top:4px; resize:vertical; font-family:inherit; }
+  .mk .igrp { background:#131722; color:var(--text); border:1px solid var(--line); border-radius:4px; font-size:11px; padding:1px 4px; }
+  .mk .top { display:flex; justify-content:space-between; align-items:center; gap:6px; }
+  .mk .tag { font-weight:700; }
+  .mk .tag.buy { color:var(--up); } .mk .tag.sell { color:var(--down); }
+  .mk .time { color:#787b86; }
+  .mk .resbadge { font-size:9px; font-weight:700; border:1px solid; border-radius:4px; padding:1px 4px; margin-left:auto; white-space:nowrap; }
+  .mk .note { margin-top:4px; white-space:pre-wrap; color:#d1d4dc; word-break:break-word; }
+  .mk .meta { margin-top:3px; font-size:10px; color:#6a6d78; }
+  .mk .acts { margin-top:6px; display:flex; gap:6px; }
+  .drw { background:#1e2a38; border-radius:8px; padding:7px; margin-bottom:6px; font-size:11px;
+         border-left:3px solid #4fc3f7; cursor:pointer; }
+  .drw.sel { outline:1px solid #4fc3f7; }
+  .mk button, #sfoot button, #revealbar button, .drw button { background:#363a45; border:none; color:var(--text);
+        border-radius:5px; padding:4px 8px; font-size:11px; cursor:pointer; transition:background .12s; }
+  .mk button:hover, #sfoot button:hover, #revealbar button:hover, .drw button:hover { background:#4c525e; }
+  #revealbar { padding:8px 10px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:5px;
+               align-items:stretch; font-size:11px; color:#787b86; }
+  #revealbar .rglabel { font-size:8px; color:#787b86; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px; }
+  #revealbar .rg { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:2px; }
+  #revealbar .rg button { aspect-ratio:1.3; min-width:0; padding:1px 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+                          border:none; border-radius:5px; background:#363a45; color:var(--text); cursor:pointer; }
+  #revealbar .rg button svg { width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+  #revealbar .rg button span { font-size:7px; color:#9aa0ab; line-height:1; }
+  #revealbar .rg button.on { background:var(--accent); color:#fff; }
+  #revealbar .rg button.on span { color:#fff; }
+  #revealbar .rg button[title^="Dezvăluie +1"], #revealbar .rg button[title^="Dezvăluie +10"], #revealbar .rg button[title^="Dezvăluie +60"] { font-size:11px; font-weight:600; }
+  #indpanel { border-bottom:1px solid var(--line); max-height:38%; display:flex; flex-direction:column; }
+  #indpanel .indhead { display:flex; align-items:center; gap:6px; padding:6px 10px; font-size:11px; color:#9aa0ab; }
+  #indpanel .indhead b { flex:1; color:#fff; }
+  #indpanel .indhead button { background:#363a45; border:none; color:var(--text); border-radius:5px; padding:3px 8px; font-size:11px; cursor:pointer; }
+  #indpanel .indhead button:hover { background:#4c525e; }
+  #indlist { overflow-y:auto; padding:0 8px 6px; }
+  .ind { display:flex; align-items:center; gap:6px; background:#262a35; border-radius:6px; padding:5px 8px; margin-bottom:4px; font-size:12px; }
+  .ind.on { border-left:3px solid var(--accent); }
+  .ind .nm { flex:1; color:#d1d4dc; }
+  .ind .nm small { display:block; color:#6a6d78; font-size:10px; }
+  .ind input[type=checkbox] { accent-color: var(--accent); }
+  .ind button { background:#363a45; border:none; color:var(--text); border-radius:4px; padding:2px 7px; font-size:11px; cursor:pointer; }
+  .ind button:hover { background:#4c525e; }
+  .ind .set { display:none; margin-top:5px; padding-top:5px; border-top:1px solid var(--line); }
+  .ind .set.open { display:block; }
+  .ind .set label { display:block; font-size:10px; color:#787b86; margin-bottom:3px; }
+  .ind .set input[type=text], .ind .set input[type=number] { width:90px; background:#131722; color:var(--text); border:1px solid var(--line); border-radius:4px; padding:2px 5px; font-size:11px; }
+  #indpicker { position:absolute; left:10px; top:120px; z-index:15; background:#262a35; border:1px solid #3a3f4d;
+               border-radius:8px; padding:8px; width:240px; box-shadow:0 8px 28px #000a; }
+  #indpicker button { display:block; width:100%; text-align:left; background:none; border:none; color:var(--text);
+                      padding:6px 8px; border-radius:6px; font-size:12px; cursor:pointer; }
+  #indpicker button:hover { background:#363a45; }
+  #indpicker button small { color:#787b86; }
+  #themePicker { position:absolute; right:10px; bottom:56px; z-index:15; background:var(--panel); border:1px solid var(--line);
+                 border-radius:8px; padding:10px; width:220px; box-shadow:0 8px 28px #000a; }
+  #ctxMenu { position:fixed; z-index:99; background:#1e222d; border:1px solid var(--line); border-radius:8px;
+             min-width:190px; padding:5px; box-shadow:0 10px 32px #000c; display:none; font-size:12px; }
+  #ctxMenu .ci { display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:5px; cursor:pointer;
+                 color:var(--text); white-space:nowrap; }
+  #ctxMenu .ci:hover { background:#363a45; }
+  #ctxMenu .ci.on { color:var(--accent); }
+  #ctxMenu .csep { height:1px; background:var(--line); margin:4px 6px; }
+  #ctxMenu .ci.long { color:var(--up); } #ctxMenu .ci.short { color:var(--down); }
+  #ctxMenu .ci .kbd { margin-left:auto; font-size:10px; color:#787b86; }
+  #ctxMenu .rrpreset { flex:1; background:#363a45; border:1px solid transparent; color:var(--text); border-radius:5px;
+                       padding:4px 0; font-size:11px; cursor:pointer; text-align:center; }
+  #ctxMenu .rrpreset:hover { background:#4c525e; border-color:var(--accent); }
+  #themePicker .tprow { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  #themePicker .tp { flex:1; min-width:70px; background:#363a45; border:1px solid transparent; color:var(--text);
+                     border-radius:6px; padding:5px 4px; font-size:11px; cursor:pointer; }
+  #themePicker .tp.on { border-color:var(--accent); }
+  #themePicker label { font-size:10px; color:#787b86; display:block; margin-bottom:3px; }
+  #themePicker input[type=color] { width:100%; height:26px; border:1px solid var(--line); border-radius:5px; background:var(--bg); cursor:pointer; }
+  #btPanel { position:absolute; left:8px; bottom:50px; z-index:14; background:var(--panel); border:1px solid var(--line);
+             border-radius:8px; padding:8px 10px; font-size:11px; color:var(--text); min-width:170px;
+             box-shadow:0 8px 28px #000a; }
+  #btPanel b { color:#fff; }
+  #btPanel .r { display:flex; justify-content:space-between; gap:12px; margin:2px 0; }
+  #btPanel .win { color:#26a69a; } #btPanel .loss { color:#ef5350; } #btPanel .open { color:#f5c542; }
+  #sfoot { padding:10px; border-top:1px solid var(--line); display:flex; gap:8px; }
+  #sfoot button { flex:1; padding:7px 4px; font-size:12px; }
+  #dlg { position:absolute; background:#262a35; border:1px solid #3a3f4d;
+         border-radius:10px; padding:12px; width:290px; z-index:10; box-shadow:0 8px 28px #000a;
+         cursor:move; user-select:none; }   /* drag de ORICARE din dialog, mai puțin câmpurile editabile */
+  #dlg input, #dlg textarea, #dlg select { user-select:text; cursor:default; }   /* aici scrii → cursor normal */
+  #dlg h4 { font-size:13px; margin-bottom:8px; color:#fff; }
+  #dlg .row { margin-bottom:8px; }
+  #dlg label { font-size:11px; color:#787b86; display:block; margin-bottom:3px; }
+  #dlg .dirbtns { display:flex; gap:6px; }
+  #dlg .dirbtns button { flex:1; padding:6px; border:none; border-radius:6px;
+        background:#363a45; color:var(--text); cursor:pointer; font-size:12px; }
+  #dlg .dirbtns button.on.buy { background:var(--up); color:#fff; }
+  #dlg .dirbtns button.on.sell { background:var(--down); color:#fff; }
+  #dlg input[type=number] { width:50%; background:#131722; color:var(--text); border:1px solid var(--line);
+        border-radius:6px; padding:5px 6px; font-size:12px; outline:none; }
+  #dlg input[type=number]:focus { border-color:#4a6fd4; }
+  #dlg textarea { width:100%; height:56px; background:#131722; color:var(--text);
+        border:1px solid var(--line); border-radius:6px; padding:6px; font-size:12px;
+        resize:vertical; font-family:inherit; outline:none; }
+  #dlg textarea:focus { border-color:#4a6fd4; }
+  #dlg .acts { display:flex; gap:6px; justify-content:flex-end; margin-top:2px; }
+  #dlg .acts button { padding:6px 12px; border:none; border-radius:6px; cursor:pointer; font-size:12px; }
+  #dlg .save { background:var(--accent); color:#fff; }
+  #dlg .save:hover { background:#3a72ff; }
+  #dlg .cancel { background:#363a45; color:var(--text); }
+  #toast { position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+        background:#2a2e39; border:1px solid var(--line); border-radius:8px;
+        padding:8px 16px; font-size:12px; z-index:20; display:none; box-shadow:0 4px 16px #000a;
+        pointer-events:none; }
+  #strip { pointer-events:none; }
+  #tfbar { position:absolute; top:8px; left:8px; z-index:7; display:flex; gap:2px;
+           background:rgba(19,23,34,0.8); border:1px solid var(--line); border-radius:6px; padding:2px; }
+  #tfbar button { background:none; border:none; color:#9aa0ab; font-size:11px; font-weight:600;
+                  padding:2px 8px; border-radius:4px; cursor:pointer; }
+  #tfbar button:hover { background:#363a45; color:#fff; }
+  #tfbar button.on { background:var(--accent); color:#fff; }
+  #drawbar { position:absolute; top:8px; right:60px; z-index:7; display:flex; gap:4px;
+             background:rgba(19,23,34,0.85); border:1px solid var(--line); border-radius:8px; padding:3px; }
+  #drawbar button { background:none; border:none; color:#d1d4dc; cursor:pointer;
+                    padding:3px 5px; border-radius:6px; display:flex; flex-direction:column; align-items:center; gap:1px; }
+  #drawbar button svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; display:block; }
+  #drawbar button span { font-size:7.5px; color:#9aa0ab; line-height:1; white-space:nowrap; }
+  #drawbar button:hover { background:#363a45; color:#fff; }
+  #drawbar button:disabled { opacity:0.35; cursor:default; background:none; color:#9aa0ab; }
+  #drawbar button.on { background:var(--accent); color:#fff; }
+  #drawbar button.on span { color:#fff; }
+  #drawbar .sep { width:1px; background:var(--line); margin:2px 3px; }
+  /* ⭐ FAVORITES plutitoare (ca TradingView): bara cu TOATE uneltele favorite vizibile — tragi de ⭐ oriunde.
+     ATENȚIE: doar left/top, FĂRĂ right — altfel left+right = elementul se întinde când îl muți în stânga! */
+  #favbar { position:absolute; top:64px; left:auto; z-index:9; display:flex; gap:2px; align-items:center;
+            background:rgba(19,23,34,0.92); border:1px solid var(--line); border-radius:10px; padding:3px 6px;
+            cursor:grab; box-shadow:0 4px 14px #000a; user-select:none; width:auto; }
+  #favbar.dragging { cursor:grabbing; }
+  #favbar .favlabel { font-size:12px; line-height:1; margin-right:2px; }
+  #favbar .favcnt { font-size:9px; color:#9aa0ab; margin-left:2px; font-weight:600; }
+  #favbar button { background:none; border:none; color:#d1d4dc; cursor:pointer; padding:4px; border-radius:6px; display:flex; }
+  #favbar button svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; display:block; }
+  #favbar button:hover { background:#363a45; color:#fff; }
+  #favbar button.on { background:var(--accent); color:#fff; }
+  #favbar:hover { border-color:#4fc3f7; }
+  /* POPUP cu uneltele favorite — deschis la click pe ⭐, poziționat sub pill (clampat în chart) */
+  #favpop { position:absolute; z-index:10; display:none; flex-direction:column; gap:2px;
+            background:rgba(19,23,34,0.96); border:1px solid var(--line); border-radius:8px; padding:4px;
+            box-shadow:0 8px 24px #000c; min-width:44px; width:auto; }
+  #favpop button { background:none; border:none; color:#d1d4dc; cursor:pointer; padding:5px 7px; border-radius:6px;
+                   display:flex; align-items:center; gap:7px; font-size:11px; width:100%; text-align:left; }
+  #favpop button svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; display:block; flex:none; }
+  #favpop button:hover { background:#363a45; color:#fff; }
+  #favpop button.on { background:var(--accent); color:#fff; }
+  #favpop .favpop-tip { font-size:9px; color:#787b86; padding:2px 6px 4px; }
+  /* replay bar jos pe chart (ca TradingView) — play + blind + reveal */
+  #replaybar { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); z-index:7; display:flex; gap:3px; align-items:center;
+               background:rgba(19,23,34,0.85); border:1px solid var(--line); border-radius:8px; padding:3px 4px; }
+  #replaybar button { background:none; border:none; color:#d1d4dc; cursor:pointer; padding:4px 7px; border-radius:6px;
+                      font-size:11px; font-weight:600; display:flex; align-items:center; }
+  #replaybar button svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; display:block; }
+  #replaybar button:hover { background:#363a45; color:#fff; }
+  #replaybar button.on { background:var(--accent); color:#fff; }
+  #toolrail { position:absolute; top:70px; left:8px; z-index:7; display:flex; flex-direction:column; gap:2px;
+              background:rgba(19,23,34,0.85); border:1px solid var(--line); border-radius:8px; padding:4px; }
+  #toolrail button { background:none; border:none; color:#d1d4dc; cursor:pointer; width:52px; text-align:center;
+                     padding:5px 2px 4px; border-radius:6px; display:flex; flex-direction:column; align-items:center; gap:2px; }
+  #toolrail button svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+  #toolrail button span { font-size:8.5px; color:#9aa0ab; line-height:1; white-space:nowrap; }
+  #toolrail button:hover { background:#363a45; }
+  #toolrail button.on { background:var(--accent); }
+  #toolrail button.on span { color:#fff; }
+  #toolrail button.long { color:#26a69a; } #toolrail button.short { color:#ef5350; }
+  #toolrail button.long.on, #toolrail button.short.on { color:#fff; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="chartBox">
+    <div id="strip"></div>
+    <div id="tfbar">
+      <button data-tf="M1" title="M1 real (94k bare)">M1</button>
+      <button data-tf="M15" class="on">M15</button>
+      <button data-tf="H1">H1</button>
+      <button data-tf="H4">H4</button>
+      <button data-tf="D1">D1</button>
+    </div>
+    <div id="pricebar"><div id="pbtag"></div><div id="pbEntry" class="pblabel entry" style="display:none"></div><div id="pbSL" class="pblabel sl" style="display:none"></div><div id="pbTP" class="pblabel tp" style="display:none"></div></div>
+    <canvas id="cv"></canvas>
+    <div id="drawbar">
+      <button id="undoBtn" title="Undo (Ctrl+Z) — anulează ultima modificare"><svg><use href="#i-undo"/></svg></button>
+      <button id="redoBtn" title="Redo (Ctrl+Shift+Z) — refă modificarea anulată"><svg><use href="#i-redo"/></svg></button>
+      <div class="sep"></div>
+      <button id="resetViewBtn" title="Reset view (fit content) — tasta A"><svg><use href="#i-pin"/></svg></button>
+      <button id="blindBtn" title="Lookahead OFF: vezi tot chart-ul — apasă ca să ascunzi viitorul"><svg><use href="#i-lock"/></svg><span>Lookahead</span></button>
+      <button id="laPlaceBtn" title="📏 Pune bara de lookahead: click pe chart = linia acolo (o dată), apoi click-ul revine la normal"><svg><use href="#i-ruler"/></svg><span>Bara</span></button>
+      <button id="laDefaultBtn" title="💾 Salvează poziția ACTUALĂ de lookahead ca default — la restart, chart-ul pornește dezvăluit până aici (nu mai dai +10/+60 de fiecare dată)"><svg><use href="#i-flag"/></svg><span>Lookahead def</span></button>
+      <button id="saveBtn" title="💾 Salvează profilul (Ctrl+S) — tot ce ai pe chart e persistat"><svg><use href="#i-save"/></svg><span>Salvează</span></button>
+      <button id="themeBtn" title="Temă culori"><svg><use href="#i-theme"/></svg></button>
+      <button id="expProfBtn" title="Export profil (desene+markers) ca JSON">⤓</button>
+      <button id="impProfBtn" title="Import profil din JSON (desene+markers)">⤒</button>
+      <button id="sideBtn" title="Arată/ascunde panoul din dreapta">◀</button>
+    </div>
+    <div id="favbar" style="display:none"><span class="favlabel">⭐</span><span class="favcnt"></span></div>
+    <div id="favpop"></div>
+    <div id="replaybar">
+      <button id="playBtn" title="Play — dezvăluie candela următoare (Space = toggle, ține apăsat = accelerare)"><svg><use href="#i-play"/></svg></button>
+      <button id="r1" title="Dezvăluie +1 candelă">+1</button>
+      <button id="r10" title="Dezvăluie +10 candele">+10</button>
+      <button id="r60" title="Dezvăluie +60 candele">+60</button>
+    </div>
+    <div id="status"></div>
+    <div id="dlg" style="display:none;"></div>
+  </div>
+  <div id="sidebar">
+    <div id="shead">
+      <b>GBPUSD.pro · M15 · 01 Mai – 31 Iul 2026</b>
+      <div class="hint" style="font-size:10px;color:#6a6d78;margin-top:4px;line-height:1.4">Unelte: V=Select · B=LONG · S=SHORT · L=Linie · P=Pen · R=Zonă · H=H-Linie · N=Notă · Shift+drag=măsură · Scroll=zoom la cursor · 👻 NW=AI pe chart · 🤖 Bot=switch listă.</div>
+      <div id="banner">⚠ Stocarea locală e blocată (file:// în Firefox) — datele NU se păstrează la refresh.
+      Folosește „Export JSON” când termini.</div>
+    </div>
+    <div id="toolbar" style="display:none">
+      <button data-t="pointer" class="on">🖱 Select</button>
+      <button data-t="long" class="long">▲ LONG</button>
+      <button data-t="short" class="short">▼ SHORT</button>
+      <button data-t="line">📐 Linie</button>
+      <button data-t="pen">✏️ Pen</button>
+      <button data-t="rect">🟦 Zonă</button>
+      <button data-t="hline">➖ H-Linie</button>
+      <button data-t="arrow">💬 Notă</button>
+    </div>
+    <div id="toolrail" title="Unelte (taste: V=Select B=LONG S=SHORT L=Linie P=Pen R=Zonă H=H-Linie N=Notă)">
+      <button data-t="pointer" class="on" title="Select (V)"><svg><use href="#i-pointer"/></svg><span>Select</span></button>
+      <button data-t="long" class="long" title="LONG (B)"><svg><use href="#i-long"/></svg><span>LONG</span></button>
+      <button data-t="short" class="short" title="SHORT (S)"><svg><use href="#i-short"/></svg><span>SHORT</span></button>
+      <button data-t="line" title="Linie (L)"><svg><use href="#i-line"/></svg><span>Linie</span></button>
+      <button data-t="pen" title="Pen (P)"><svg><use href="#i-pen"/></svg><span>Pen</span></button>
+      <button data-t="rect" title="Zonă (R)"><svg><use href="#i-rect"/></svg><span>Zonă</span></button>
+      <button data-t="hline" title="H-Linie (H)"><svg><use href="#i-hline"/></svg><span>H-Linie</span></button>
+      <button data-t="arrow" title="Notă (N)"><svg><use href="#i-note"/></svg><span>Notă</span></button>
+    </div>
+    <div id="debug" style="display:none;padding:4px 10px;font-size:10px;color:#6a6d78;background:#1a1d26;border-bottom:1px solid var(--line);font-family:Consolas,monospace;"></div>
+    <div id="indpanel">
+      <div class="indhead"><b>INDICATORI</b><button id="addInd" title="Adaugă indicator">＋ Adaugă</button></div>
+      <div id="indlist"></div>
+      <div id="indpicker" style="display:none"></div>
+    </div>
+    <div id="list"></div>
+    <div id="revealbar">
+      <div class="rglabel">Analiză</div>
+      <div class="rg">
+        <button id="btBtn" title="Backtest vizual: rulează SL/TP pe barele viitoare"><svg><use href="#i-test"/></svg><span>Backtest</span></button>
+        <button id="btEye" title="Ascunde/arată liniile de backtest (overlay on/off)"><svg><use href="#i-eye"/></svg><span>Liniile</span></button>
+        <button id="nwBtn" title="Ghost markers: pune LONG/SHORT pe semnalele No-Wick din zona vizibilă"><svg><use href="#i-ai"/></svg><span>Ghost</span></button>
+        <button id="botBtn" title="🤖 Bot: backtest automat cu config-ul bot-ului pe TOT istoricul"><svg><use href="#i-bot"/></svg><span>Bot</span></button>
+        <button id="finBtn" title="Finalizează sesiunea: raport complet (TAKE vs SKIP, WIN/LOSS, filtre)"><svg><use href="#i-report"/></svg><span>Raport</span></button>
+      </div>
+      <div class="rglabel" style="margin-top:6px">Setări poziții</div>
+      <div class="rg">
+        <button id="lockRRBtn" title="🔒 R:R fix: când muți SL-ul, TP-ul se mută proporțional (același R:R) și invers"><svg><use href="#i-lock"/></svg><span>🔒 R:R fix</span></button>
+        <button id="magBtn" title="🧲 Magnet (ca TradingView): lipește prețul de wick-uri (high/low), open/close, liniile SL/TP și desene. Soft = doar când ești aproape, Hard = mereu pe cel mai apropiat. Ține Ctrl în timpul drag-ului = Hard temporar."><svg><use href="#i-magnet"/></svg><span>🧲 Magnet</span></button>
+      </div>
+      <span id="nwCount" style="font-size:10px;color:#f5c542;white-space:nowrap;margin-top:2px"></span>
+    </div>
+    <div id="btPanel" style="display:none"></div>
+    <div id="themePicker" style="display:none"></div>
+    <div id="sfoot">
+      <button id="delD" title="Șterge desenul selectat (Delete)">🗑 Șterge desen</button>
+      <button id="exp">Export JSON</button>
+      <button id="expEA">📤 MT5 EA</button>
+      <button id="imp">Import JSON</button>
+      <button id="cls">Șterge tot</button>
+      <input type="file" id="impFile" accept="application/json" style="display:none">
+    </div>
+  </div>
+</div>
+<div id="ctxMenu">
+  <div class="ci" data-cmd="pointer">🖱 Select<span class="kbd">V</span></div>
+  <div class="ci long" data-cmd="long">▲ LONG<span class="kbd">B</span></div>
+  <div class="ci short" data-cmd="short">▼ SHORT<span class="kbd">S</span></div>
+  <div class="csep"></div>
+  <div class="ci" data-cmd="line">📐 Linie<span class="kbd">L</span></div>
+  <div class="ci" data-cmd="rect">🟦 Zonă<span class="kbd">R</span></div>
+  <div class="ci" data-cmd="hline">➖ H-Linie<span class="kbd">H</span></div>
+  <div class="ci" data-cmd="arrow">💬 Notă<span class="kbd">N</span></div>
+  <div class="csep"></div>
+  <div class="ci" data-cmd="lockrr" id="ctxLockRR">🔒 R:R fix</div>
+  <div class="ci" data-cmd="isolate" id="ctxIsolate">🔍 Izolează la selectare</div>
+  <div class="ci" data-cmd="slanchor" id="ctxSlAnchor">📌 SL Anchor</div>
+  <div id="ctxPosSet" class="ci" style="cursor:default;flex-wrap:wrap;gap:4px;padding:4px 8px;display:none">
+    <span style="color:#787b86;font-size:10px;width:100%">Setări poziție selectată:</span>
+    <span style="display:flex;gap:4px;width:100%;align-items:center;flex-wrap:wrap">
+      <label style="font-size:11px;display:flex;gap:3px;align-items:center"><input id="ctxExpOn" type="checkbox"> Expiry</label>
+      <input id="ctxExpN" type="number" min="1" max="500" step="1" style="width:52px;background:#363a45;border:1px solid var(--line);color:var(--text);border-radius:5px;padding:2px 4px"> candele
+      <button class="rrpreset" id="ctxEntryNow" style="flex:none">Entry aici</button>
+      <button class="rrpreset" id="ctxEntryNext" style="flex:none">Entry urm.</button>
+    </span>
+  </div>
+  <div class="csep"></div>
+  <div class="ci" style="cursor:default;flex-wrap:wrap;gap:4px;padding:4px 8px">
+    <span style="color:#787b86;font-size:10px;width:100%">Aplică R:R pe poziția selectată:</span>
+    <span style="display:flex;gap:4px;width:100%">
+      <button class="rrpreset" data-rr="1">1</button>
+      <button class="rrpreset" data-rr="1.5">1.5</button>
+      <button class="rrpreset" data-rr="2">2</button>
+      <button class="rrpreset" data-rr="2.5">2.5</button>
+      <button class="rrpreset" data-rr="3">3</button>
+    </span>
+  </div>
+  <div class="ci" data-cmd="bt">🧪 Backtest</div>
+  <div class="ci" data-cmd="export">📦 Export JSON</div>
+</div>
+<div id="toast"></div>
+<script>
 "use strict";
 let DATA = [], DATA_M1 = [];
-let RETRACE_MARKERS = [];            // 425 trade-uri retrace (incarcate extern, ca si OHLC)
 let DATA_BASE = DATA;              // M15 original — sursa pentru agregari
-function __setData(o){ if(!o) return; DATA = o.m15 || []; DATA_M1 = o.m1 || []; RETRACE_MARKERS = o.retrace || []; DATA_BASE = DATA; __boot(); }
-;   // PROFIL DEFAULT (24 drawing lines + 5 trades) — din profiles/gbpusd_draw.profile.json, salvat in _charts/
-// DATE EXTERNE (separate de cod): gbpusd_ohlc_2026.json (http) sau gbpusd_ohlc_2026.js (file:// — fetch blocat de CORS)
+function __setData(o){ if(!o) return; DATA = o.m15 || []; DATA_M1 = o.m1 || []; DATA_BASE = DATA; __boot(); }
+window.GBPUSD_DEFAULT_PROFILE={"markers":[{"bar":148,"price":1.35664,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-04 10:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1777888800000,"seen_through":null,"id":4},{"bar":207,"price":1.35304,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-05 01:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1777941900000,"seen_through":null,"id":7},{"bar":262,"price":1.35484,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-05 14:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1777991400000,"seen_through":null,"id":9},{"bar":300,"price":1.35416,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-06 00:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778025600000,"seen_through":null,"id":10},{"bar":375,"price":1.35908,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-06 19:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778093100000,"seen_through":null,"id":11},{"bar":492,"price":1.35519,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-08 00:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778198400000,"seen_through":null,"id":12},{"bar":511,"price":1.3553,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-08 05:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778215500000,"seen_through":null,"id":13},{"bar":514,"price":1.35541,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-08 05:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778218200000,"seen_through":null,"id":14},{"bar":621,"price":1.3592,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-11 08:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778487300000,"seen_through":null,"id":15},{"bar":745,"price":1.3529,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-12 15:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778598900000,"seen_through":null,"id":16},{"bar":802,"price":1.35358,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-13 05:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778650200000,"seen_through":null,"id":17},{"bar":811,"price":1.35449,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-13 08:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778658300000,"seen_through":null,"id":18},{"bar":878,"price":1.35301,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-14 00:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778718600000,"seen_through":null,"id":19},{"bar":913,"price":1.35192,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-14 09:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778750100000,"seen_through":null,"id":20},{"bar":1003,"price":1.33532,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-15 08:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1778831100000,"seen_through":null,"id":21},{"bar":1087,"price":1.3312,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-18 05:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779079500000,"seen_through":null,"id":22},{"bar":1111,"price":1.33716,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-18 11:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779101100000,"seen_through":null,"id":23},{"bar":1180,"price":1.3417,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-19 04:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779163200000,"seen_through":null,"id":24},{"bar":1200,"price":1.33997,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-19 09:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779181200000,"seen_through":null,"id":25},{"bar":1267,"price":1.34018,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-20 02:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779241500000,"seen_through":null,"id":26},{"bar":1284,"price":1.33997,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-20 06:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779256800000,"seen_through":null,"id":27},{"bar":1293,"price":1.33897,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-20 08:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779264900000,"seen_through":null,"id":28},{"bar":1316,"price":1.33998,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-20 14:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779285600000,"seen_through":null,"id":29},{"bar":1488,"price":1.34246,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-22 09:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779440400000,"seen_through":null,"id":30},{"bar":1571,"price":1.34765,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-25 06:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779687900000,"seen_through":null,"id":31},{"bar":1606,"price":1.34999,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-05-25 14:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779719400000,"seen_through":null,"id":32},{"bar":1650,"price":1.35009,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-26 01:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779759000000,"seen_through":null,"id":33},{"bar":1782,"price":1.34473,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-27 10:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779877800000,"seen_through":null,"id":34},{"bar":1851,"price":1.34055,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-28 04:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1779939900000,"seen_through":null,"id":35},{"bar":1962,"price":1.34405,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-29 07:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1780039800000,"seen_through":null,"id":36},{"bar":1965,"price":1.34441,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-29 08:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1780042500000,"seen_through":null,"id":37},{"bar":1975,"price":1.34166,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-05-29 11:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1780051500000,"seen_through":null,"id":38},{"bar":2060,"price":1.34632,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-06-01 08:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1780300800000,"seen_through":null,"id":39},{"bar":2137,"price":1.346,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-02 03:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1780370100000,"seen_through":null,"id":40},{"bar":2186,"price":1.34732,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-06-02 15:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1780414200000,"seen_through":null,"id":41},{"bar":2227,"price":1.34544,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-03 02:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1780451100000,"seen_through":null,"id":42},{"bar":2335,"price":1.34248,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-06-04 05:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1780548300000,"seen_through":null,"id":43},{"bar":2455,"price":1.3454,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-06-05 11:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1780656300000,"seen_through":null,"id":44},{"bar":2542,"price":1.33297,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-08 08:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1780907400000,"seen_through":null,"id":45},{"bar":2656,"price":1.33956,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-06-09 13:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1781010000000,"seen_through":null,"id":46},{"bar":2747,"price":1.33948,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-06-10 12:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1781091900000,"seen_through":null,"id":47},{"bar":2895,"price":1.34196,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-06-12 01:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1781225100000,"seen_through":null,"id":48},{"bar":3189,"price":1.34297,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-06-17 02:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1781662500000,"seen_through":null,"id":49},{"bar":3234,"price":1.3406,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-17 13:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1781703000000,"seen_through":null,"id":50},{"bar":3472,"price":1.32099,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-22 01:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782091800000,"seen_through":null,"id":51},{"bar":3480,"price":1.32259,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-22 03:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782099000000,"seen_through":null,"id":52},{"bar":3596,"price":1.32408,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-23 08:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782203400000,"seen_through":null,"id":53},{"bar":3604,"price":1.32216,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-23 10:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782210600000,"seen_through":null,"id":54},{"bar":3759,"price":1.31641,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-06-25 01:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782350100000,"seen_through":null,"id":55},{"bar":3811,"price":1.31587,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-25 14:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782396900000,"seen_through":null,"id":56},{"bar":3855,"price":1.31897,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-26 01:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782436500000,"seen_through":null,"id":57},{"bar":3947,"price":1.31939,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-29 00:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782692100000,"seen_through":null,"id":58},{"bar":3952,"price":1.31956,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-06-29 01:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782696600000,"seen_through":null,"id":59},{"bar":3966,"price":1.32028,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-06-29 05:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782709200000,"seen_through":null,"id":60},{"bar":4195,"price":1.32401,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-07-01 14:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782915300000,"seen_through":null,"id":61},{"bar":4238,"price":1.328,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-07-02 01:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1782954000000,"seen_through":null,"id":62},{"bar":4477,"price":1.3342,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-07-06 13:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1783341900000,"seen_through":null,"id":63},{"bar":4482,"price":1.33444,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-07-06 14:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1783346400000,"seen_through":null,"id":64},{"bar":4542,"price":1.33912,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-07-07 05:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1783400400000,"seen_through":null,"id":65},{"bar":4781,"price":1.33989,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-07-09 17:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1783615500000,"seen_through":null,"id":66},{"bar":4930,"price":1.33785,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-07-13 06:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1783922400000,"seen_through":null,"id":67},{"bar":5027,"price":1.33599,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-07-14 06:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1784009700000,"seen_through":null,"id":68},{"bar":5032,"price":1.33657,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-07-14 07:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1784014200000,"seen_through":null,"id":69},{"bar":5107,"price":1.33952,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-07-15 02:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1784081700000,"seen_through":null,"id":70},{"bar":5293,"price":1.34745,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-07-17 01:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1784249100000,"seen_through":null,"id":71},{"bar":5359,"price":1.34461,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-07-17 17:30 · SL 8.0p / TP 8.0p · EOD 21:30","created":1784308500000,"seen_through":null,"id":72},{"bar":5505,"price":1.34365,"dir":"LONG","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bull · fill@2026-07-21 06:00 · SL 8.0p / TP 8.0p · EOD 21:30","created":1784612700000,"seen_through":null,"id":73},{"bar":6010,"price":1.32799,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-07-28 12:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1785240000000,"seen_through":null,"id":74},{"bar":6062,"price":1.32849,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-07-29 01:15 · SL 8.0p / TP 8.0p · EOD 21:30","created":1785286800000,"seen_through":null,"id":75},{"bar":6072,"price":1.32888,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-07-29 03:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1785295800000,"seen_through":null,"id":76},{"bar":6284,"price":1.346,"dir":"SHORT","sl":8,"tp":8,"ghost":true,"fc":2,"note":"🔬 RETRACE bear · fill@2026-07-31 08:45 · SL 8.0p / TP 8.0p · EOD 21:30","created":1785486600000,"seen_through":null,"id":77},{"id":1,"bar":47,"price":1.35964,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 14.5p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786331932524,"seen_through":249},{"id":2,"bar":125,"price":1.35892,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -9.0p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786331932524,"seen_through":249},{"id":3,"bar":131,"price":1.35842,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 13.6p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786331932524,"seen_through":249},{"id":5,"bar":184,"price":1.35188,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 13.4p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786331932524,"seen_through":249},{"id":6,"bar":196,"price":1.35371,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -6.3p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786331932524,"seen_through":249},{"id":8,"bar":231,"price":1.3524,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -8.2p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786331932524,"seen_through":249},{"id":78,"bar":12,"price":1.37307,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 7.2p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":79,"bar":18,"price":1.37398,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -7.2p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":80,"bar":23,"price":1.37295,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 7.2p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":81,"bar":30,"price":1.37449,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -6.5p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":82,"bar":48,"price":1.3774,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -13.1p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":83,"bar":49,"price":1.3761,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 10.1p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":84,"bar":75,"price":1.37094,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 14.9p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":85,"bar":89,"price":1.37419,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -5.7p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":86,"bar":136,"price":1.37281,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -3.0p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":87,"bar":146,"price":1.36912,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 6.2p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":88,"bar":158,"price":1.36533,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -44.3p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":89,"bar":169,"price":1.36049,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 8.5p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":90,"bar":188,"price":1.36352,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -4.8p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":91,"bar":200,"price":1.36545,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -4.6p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":92,"bar":212,"price":1.36488,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -11.8p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":93,"bar":225,"price":1.36256,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 3.2p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":94,"bar":233,"price":1.36629,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 8.0p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":95,"bar":257,"price":1.36341,"dir":"LONG","ghost":true,"note":"👻 NW bull · body 15.1p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847},{"id":96,"bar":269,"price":1.36532,"dir":"SHORT","ghost":true,"note":"👻 NW bear · body -12.9p · SL 5p / TP 5p · PASS/SKIP? DE CE?","sl":5,"tp":5,"fc":60,"created":1786334704779,"seen_through":20847}],"drawings":[],"indicators":[{"type":"omar","on":true,"params":{"pivotLen":5,"showStruct":true,"showBosChoch":true,"showNoWick":true,"anchorType":"Body"}}],"omarParams":{"pivotLen":5,"showStruct":true,"showBosChoch":true,"showNoWick":true,"anchorType":"Body"},"settings":{"anchored":true,"sidebarCollapsed":false,"lockRR":false,"magnet":"hard","isolate":false,"nwVisible":true,"treeView":"all","botActivated":false,"theme":"dark"}};   // PROFIL DEFAULT (24 drawing lines + 5 trades) — din profiles/gbpusd_draw.profile.json, salvat in _charts/
+// DATE EXTERNE (separate de cod): gbpusd_ohlc.json (http) sau gbpusd_ohlc.js (file:// — fetch blocat de CORS)
 (async () => {
   await Promise.resolve();   // asteapta sfarsitul parse-ului scriptului (const cv/ctx etc. in TDZ altfel)
   let o = null;
-  if (window.GBPUSD_OHLC_2026 && Array.isArray(window.GBPUSD_OHLC_2026.m15)) { o = window.GBPUSD_OHLC_2026; }
+  if (window.GBPUSD_OHLC && Array.isArray(window.GBPUSD_OHLC.m15)) { o = window.GBPUSD_OHLC; }
   else {
-    try { const r = await fetch("gbpusd_ohlc_2026.json"); if (r.ok) o = await r.json(); } catch(e) {}
+    try { const r = await fetch("gbpusd_ohlc.json"); if (r.ok) o = await r.json(); } catch(e) {}
     if (!o) {
       o = await new Promise((res, rej) => {
         const s = document.createElement("script");
-        s.src = "gbpusd_ohlc_2026.js";
-        s.onload = () => res(window.GBPUSD_OHLC_2026 || null);
-        s.onerror = () => rej(new Error("gbpusd_ohlc_2026.js lipseste langa HTML (data file)"));
+        s.src = "gbpusd_ohlc.js";
+        s.onload = () => res(window.GBPUSD_OHLC || null);
+        s.onerror = () => rej(new Error("gbpusd_ohlc.js lipseste langa HTML (data file)"));
         document.head.appendChild(s);
       });
     }
   }
-  if (o) { DATA = o.m15 || DATA; DATA_M1 = o.m1 || DATA_M1; RETRACE_MARKERS = o.retrace || RETRACE_MARKERS; DATA_BASE = DATA; __boot(); }
+  if (o) { DATA = o.m15 || DATA; DATA_M1 = o.m1 || DATA_M1; DATA_BASE = DATA; __boot(); }
 })();
 const DIG = 5, PIP = 0.0001;   // PIP = pip REAL GBPUSD (5 digiti) — NU point 0.00001; analizorul (analyze_markers.py) foloseste tot 0.0001
 const COL = { bg:"#131722", grid:"#232833", up:"#26a69a", down:"#ef5350",
@@ -197,7 +594,7 @@ function __restoreState(){   // RULEAZA DUPA incarcarea datelor (DATA.length > 0
 if(storageOK){
   try{
     // PROFIL: gbpusd_profile (nou, dedicat) > gbpusd_profile_bak (backup) > gbpusd_data (vechi) — mereu se incarca
-    const s=localStorage.getItem("gbpusd_profile") || localStorage.getItem("gbpusd_profile_bak") || localStorage.getItem("gbpusd_data_2026");
+    const s=localStorage.getItem("gbpusd_profile") || localStorage.getItem("gbpusd_profile_bak") || localStorage.getItem("gbpusd_data");
     const o = s ? JSON.parse(s) : (window.GBPUSD_DEFAULT_PROFILE || null);   // FALLBACK: profilul default din _charts/profiles/ (ca TV — desenele sunt ACOLO la deschidere)
     if(o){
       // v7.53: PROFIL TF-SAFE — dacă e salvat pe alt TF (ex. M1), detectăm + remapăm prin timestamp
@@ -205,8 +602,7 @@ if(storageOK){
       const recovered=!!(srcTF && srcTF!=="M15");
       if(recovered){ remapProfileTF(o, srcTF); console.log("[chart] profil recuperat de pe "+srcTF+" → M15"); }
       markers=(Array.isArray(o.markers)?o.markers:[]).filter(m=>m&&Number.isInteger(m.bar)&&m.bar>=0&&m.bar<DATA.length)
-        .map(m=>({...m, ghost:!!m.ghost, decision:m.decision??null, reason:m.reason??null,   // v7.57: backfill categorii fixe PASS/SKIP (marker-e vechi = neadnotate)
-          tf:(m.tf==="M1"||m.tf==="M15"||m.tf==="H1"||m.tf==="H4"||m.tf==="D1")?m.tf:"M15",   // v7.54: ancora de evaluare (TF de plasare + ts)
+        .map(m=>({...m, ghost:!!m.ghost, tf:(m.tf==="M1"||m.tf==="M15"||m.tf==="H1"||m.tf==="H4"||m.tf==="D1")?m.tf:"M15",   // v7.54: ancora de evaluare (TF de plasare + ts)
           ts:(m.ts!=null&&isFinite(m.ts))?m.ts:(DATA[m.bar]?DATA[m.bar][0]:undefined)}));   // FIX CRITIC: marker-ele vechi fara 'ghost' (undefined) -> false — altfel drawMarker le ascundea (ex. #92 editata inainte de v7.31.35)
       drawings=(Array.isArray(o.drawings)?o.drawings:[]).filter(d=>d&&Array.isArray(d.pts)&&d.pts.length>=1&&d.pts.every(p=>Number.isInteger(p.bar)&&p.bar>=0&&p.bar<DATA.length&&isFinite(p.price)));
       if(Array.isArray(o.indicators)&&o.indicators.length) indicators=o.indicators
@@ -227,23 +623,13 @@ if(storageOK){
   const ghostsAll=markers.filter(m=>m.ghost).sort((a,b)=>a.bar-b.bar);
   for(const g of ghostsAll) g.id=gseq++;
   // persist normalizarea ghost (marker-e vechi fara 'ghost' -> false, altfel dispar de pe chart — ex. #92) + re-numerotarea
-  if(markers.length){ try{ localStorage.setItem("gbpusd_data_2026", JSON.stringify({markers,drawings,indicators,omarParams})); }catch(e){} }
+  if(markers.length){ try{ localStorage.setItem("gbpusd_data", JSON.stringify({markers,drawings,indicators,omarParams})); }catch(e){} }
 }
 mkSeq = markers.reduce((mx,m)=>Math.max(mx, typeof m.id==="number"?m.id:0), 0);
-    // 2026: daca localStorage e gol dar avem RETRACE_MARKERS, incarca-le ca ghost-uri
-    if(!markers.length && RETRACE_MARKERS.length){
-      markers = RETRACE_MARKERS.map(m=>({...m, ghost:true, decision:m.decision??null, reason:m.reason??null, note: m.note || ""}));
-      mkSeq = markers.reduce((mx,m)=>Math.max(mx, typeof m.id==="number"?m.id:0), 0);
-      nwVisible = true;
-      // centreaza view-ul pe primele trade-uri retrace
-      const firstTrade = Math.min(...RETRACE_MARKERS.map(m=>m.bar));
-      view.start = Math.max(0, firstTrade - 60);
-      view.count = 180;
-    }
 drwSeq = drawings.reduce((mx,d)=>Math.max(mx, typeof d.id==="number"?d.id:0), 0);
 if(!storageOK) el("banner").style.display="block";
 }
-let nwVisible=true;         // 2026: trade-urile retrace se vad DIRECT la load (TDZ fix)         // ghost markers vizibili? (👻 NW = toggle: click 1 arată, click 2 ascunde) — declarat INAINTE de renderList (TDZ fix)
+let nwVisible=false;         // ghost markers vizibili? (👻 NW = toggle: click 1 arată, click 2 ascunde) — declarat INAINTE de renderList (TDZ fix)
 let treeView="all";          // object tree: 'all' | 'ai' (doar ghost) | 'mine' (doar ale tale) — butonul 🤖 Bot comută asta
 let botActivated=false;      // la load, ghost-urile bot din storage NU se afișează în listă până la prima apăsare 🤖 Bot (refresh = start curat)
 let lockRR=false;            // settings: când muți SL → TP se mută proporțional (același R:R), și invers
@@ -1532,19 +1918,7 @@ function renderList(){
         html+='<div class="mk ghost'+(m.dir==="SHORT"?" sell":"")+selCls+'" data-mid="'+m.id+'"><div class="top"><span class="tag" style="background:'+col+'">'+(m.tag?m.tag:'#'+m.id)+' '+m.dir+' AI</span>'+
           '<span class="time">'+fmtTRO(c[0])+'</span><span>'+fmtP(m.price)+'</span>'+resBadge(m)+'</div>'+
           (m.sl!=null?'<div class="meta">SL '+m.sl+'p · TP '+(m.tp!=null?m.tp:"-")+'p</div>':'')+
-          '<div class="adc">'+
-            '<button class="adcP'+(m.decision==="PASS"?" on":"")+'" data-adc="PASS" data-mid="'+m.id+'">✅ PASS</button>'+
-            '<button class="adcS'+(m.decision==="SKIP"?" on":"")+'" data-adc="SKIP" data-mid="'+m.id+'">❌ SKIP</button>'+
-            '<select class="adcR" data-mid="'+m.id+'"'+(m.decision?"":" disabled")+'><option value="">Motiv…</option>'+
-              '<option value="trend_unclear"'+(m.reason==="trend_unclear"?" selected":"")+'>1. Trend neclar / lateral</option>'+
-              '<option value="sl_too_big"'+(m.reason==="sl_too_big"?" selected":"")+'>2. SL prea mare (peste ~13p)</option>'+
-              '<option value="news_session"'+(m.reason==="news_session"?" selected":"")+'>3. Aproape de știre / sesiune proastă</option>'+
-              '<option value="weak_structure"'+(m.reason==="weak_structure"?" selected":"")+'>4. Structură slabă (CHoCH/BOS)</option>'+
-              '<option value="suspect_wick"'+(m.reason==="suspect_wick"?" selected":"")+'>5. Wick suspect</option>'+
-              '<option value="looks_good"'+(m.reason==="looks_good"?" selected":"")+'>6. Arată bine, iau</option>'+
-              '<option value="other"'+(m.reason==="other"?" selected":"")+'>7. Altceva (explică în notă)</option>'+
-            '</select></div>'+
-          '<textarea class="inote" data-mid="'+m.id+'" placeholder="Detalii opționale…" rows="2">'+(m.note?escapeHtml(m.note):"")+'</textarea>'+
+          '<textarea class="inote" data-mid="'+m.id+'" placeholder="PASS/SKIP? De ce?…" rows="2">'+(m.note?escapeHtml(m.note):"")+'</textarea>'+
           '<div class="acts"><button data-a="del" data-mid="'+m.id+'">🗑 SKIP (șterge)</button></div></div>';
       });
     }
@@ -1574,19 +1948,6 @@ function renderList(){
   // comentariu inline (textarea) + grup (select) — salveaza direct, fara dialog
   l.querySelectorAll('.inote').forEach(t=>t.onchange=()=>{ const mk=markers.find(x=>x.id===+t.dataset.mid); if(mk){ mk.note=t.value.trim(); save(); } });
   l.querySelectorAll('.igrp').forEach(s=>s.onchange=()=>{ const mk=markers.find(x=>x.id===+s.dataset.mid); if(mk){ mk.group=s.value?+s.value:null; save(); requestRender(); } });
-  // v7.57: categorii fixe PASS/SKIP + motiv — click pe PASS/SKIP seteaza decision, selectul de motiv se activeaza dupa
-  l.querySelectorAll('[data-adc]').forEach(b=>b.onclick=()=>{ const mk=markers.find(x=>x.id===+b.dataset.mid); if(!mk) return;
-    const dec=b.dataset.adc;
-    if(mk.decision===dec){ mk.decision=null; mk.reason=null; }            // toggle off (radio-style: acelasi buton = dezactiveaza)
-    else { mk.decision=dec; if(dec==="PASS") mk.reason=mk.reason||"looks_good"; else mk.reason=mk.reason||null; }  // PASS: motiv optional (default looks_good); SKIP: trebuie ales din select
-    save(); requestRender(); });
-  l.querySelectorAll('.adcR').forEach(s=>s.onchange=()=>{ const mk=markers.find(x=>x.id===+s.dataset.mid); if(mk){ mk.reason=s.value||null; save(); requestRender(); } });
-  // v7.57: contor de progres adnotare (cate PASS/SKIP din ghost-urile vizibile)
-  const g2=markers.filter(m=>m.ghost);
-  const done=g2.filter(m=>m.decision!=null).length;
-  const pass=g2.filter(m=>m.decision==="PASS").length;
-  const elCount=el("annCount");
-  if(elCount) elCount.textContent="Adnotate: "+done+" / "+g2.length+" ("+(g2.length?Math.round(100*pass/Math.max(1,done)):0)+"% PASS)";
 }
 function jumpTo(b){ view.start=Math.max(0, Math.min(b-60, maxStart())); view.count=120; yRangeCache=null; requestRender(); }
 
@@ -1610,7 +1971,7 @@ function syncListSel(){
 
 function save(){ pushHist();
   if(storageOK){ try{ const prof=JSON.stringify(normalizeToM15({markers,drawings,indicators,omarParams}));   // v7.53: salvăm MEREU în coordonate M15 (profil TF-safe)
-      localStorage.setItem("gbpusd_data_2026", prof);                       // compat vechi
+      localStorage.setItem("gbpusd_data", prof);                       // compat vechi
       localStorage.setItem("gbpusd_profile", prof);                    // PROFIL dedicat (separat de datele chart)
       localStorage.setItem("gbpusd_profile_bak", prof);                // backup permanent (anti-suprascriere)
     }catch(e){}
@@ -1620,7 +1981,7 @@ function save(){ pushHist();
       localStorage.setItem("gbpusd_last", JSON.stringify(cur)); }catch(e){} }
   renderList(); }
 function exportProfile(){
-  const obj={ app:"gbpusd_draw_2026", profile_v:2, ts:new Date().toISOString(), n:markers.length, d:drawings.length,
+  const obj={ app:"gbpusd_draw", profile_v:2, ts:new Date().toISOString(), n:markers.length, d:drawings.length,
     markers, drawings, indicators, omarParams };
   const json=JSON.stringify(obj, null, 1);
   try{ const b=new Blob([json],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download="gbpusd_draw.profile.json"; a.click(); }catch(e){}   // nume fix — pui JSON-ul in _charts/profiles/ ca sa devina default la urmatorul build
@@ -1633,7 +1994,7 @@ function importProfile(jsonStr){
     if(!o || (!Array.isArray(o.markers)&&!Array.isArray(o.drawings))){ toast("Profil invalid — lipsesc markers/drawings"); return false; }
     const srcTF=(o.tf==="M1"||o.tf==="M15"||o.tf==="H1"||o.tf==="H4"||o.tf==="D1")?o.tf:detectProfileTF(o);   // v7.53: profil importat pe alt TF → remapat
     if(srcTF && srcTF!=="M15"){ remapProfileTF(o, srcTF); toast("Profil importat pe "+srcTF+" → remapat pe M15"); }
-    if(Array.isArray(o.markers)) markers=o.markers.filter(m=>m&&Number.isInteger(m.bar)&&m.bar>=0&&m.bar<DATA.length).map(m=>({...m, ghost:!!m.ghost, decision:m.decision??null, reason:m.reason??null}));
+    if(Array.isArray(o.markers)) markers=o.markers.filter(m=>m&&Number.isInteger(m.bar)&&m.bar>=0&&m.bar<DATA.length).map(m=>({...m, ghost:!!m.ghost}));
     if(Array.isArray(o.drawings)) drawings=o.drawings.filter(d=>d&&Array.isArray(d.pts)&&d.pts.length>=1&&d.pts.every(p=>Number.isInteger(p.bar)&&p.bar>=0&&p.bar<DATA.length&&isFinite(p.price)));
     if(Array.isArray(o.indicators)&&o.indicators.length) indicators=o.indicators.filter(x=>IND_TYPES[x.type]).map(x=>({type:x.type, on:x.on!==false, params:Object.assign({}, IND_TYPES[x.type].defaults, x.params||{})}));
     if(o.omarParams) omarParams=Object.assign({}, IND_TYPES.omar.defaults, o.omarParams);
@@ -2709,7 +3070,6 @@ el("resetViewBtn").onclick=()=>{ resetView(); };
 el("exp").onclick=()=>{  const data={ version:5, session_id:sessionId,
     markers:markers.map(m=>{ const c=DATA[m.bar]; if(!c) return null; const up=m.dir==="LONG"; return {
       time:fmtT(c[0]), ts:c[0], price:m.price, dir:m.dir, note:m.note||"",
-      decision:m.decision??null, reason:m.reason??null,   // v7.57: categorii fixe PASS/SKIP pt analyze_markers.py
       sl:m.sl!=null?m.sl:null, tp:m.tp!=null?m.tp:null,
       fc:m.fc>0?m.fc:null,
       sl_price:(m.sl!=null)?+(m.price-(up?1:-1)*m.sl*PIP).toFixed(DIG):null,
@@ -2899,3 +3259,50 @@ try{ const th=JSON.parse(localStorage.getItem("gbpusd_theme")||"null");
   if(th&&th.name){ themeName=th.name; themeAccent=th.accent||null; } }catch(e){}
 applyTheme(themeName, themeAccent);
 }
+</script>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <defs>
+    <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/></symbol>
+    <symbol id="i-long" viewBox="0 0 24 24"><path d="M5 3h14"/><path d="m18 13-6-6-6 6"/><path d="M12 7v14"/></symbol>
+    <symbol id="i-short" viewBox="0 0 24 24"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></symbol>
+    <symbol id="i-line" viewBox="0 0 24 24"><path d="M3 20 21 4"/><circle cx="3" cy="20" r="2" fill="currentColor" stroke="none"/><circle cx="21" cy="4" r="2" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></symbol>
+    <symbol id="i-rect" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></symbol>
+    <symbol id="i-hline" viewBox="0 0 24 24"><line x1="4" y1="12" x2="20" y2="12"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/><path d="M7 11h10"/><path d="M7 15h6"/></symbol>
+    <symbol id="i-test" viewBox="0 0 24 24"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></symbol>
+    <symbol id="i-ai" viewBox="0 0 24 24"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4"/><circle cx="12" cy="2" r="1.5"/><circle cx="9" cy="13" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="13" r="1.2" fill="currentColor" stroke="none"/><path d="M9.5 17h5"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="5" y="3" width="4" height="18" rx="1"/><rect x="15" y="3" width="4" height="18" rx="1"/></symbol>
+    <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-magnet" viewBox="0 0 24 24"><path d="m6 15-4-4 6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15z"/><path d="m5 8 4 4"/><path d="m12 15 4 4"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 22V4a1 1 0 0 1 1-1h13l-3 4 3 4H5"/><path d="M4 4h16"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-theme" viewBox="0 0 24 24"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></symbol>
+    <symbol id="i-report" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+    <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0-5.5 5.5a5.5 5.5 0 0 0 5.5 5.5H13"/></symbol>
+  </defs>
+</svg>
+</body>
+</html>
+"""
+
+html = HTML
+OHLC_OUT = os.path.join(HERE, "gbpusd_ohlc.json")
+OHLC_JS = os.path.join(HERE, "gbpusd_ohlc.js")
+ohlc_obj = {"m15": rows, "m1": rows_m1}
+ohlc_js = json.dumps(ohlc_obj, separators=(",", ":"))
+with open(OHLC_OUT, "w", encoding="utf-8") as f:
+    f.write(ohlc_js)
+with open(OHLC_JS, "w", encoding="utf-8") as f:
+    f.write("window.GBPUSD_OHLC=" + ohlc_js + ";")
+with open(OUT, "w", encoding="utf-8") as f:
+    f.write(html)
+print("scris", OUT, os.path.getsize(OUT), "bytes |", OHLC_OUT, os.path.getsize(OHLC_OUT), "bytes |", OHLC_JS, os.path.getsize(OHLC_JS), "bytes |", len(rows), "bare")
