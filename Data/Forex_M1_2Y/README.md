@@ -14,7 +14,18 @@ Date M1 (1 minut) pentru 7 perechi forex majore, exportate din MetaTrader 5 (pip
 | `USDCHF_M1_2024_2026.csv` | 916,189 | 2024-01-02 09:59 | 2026-06-30 23:55 |
 | `USDJPY_M1_2024_2026.csv` | 917,081 | 2024-01-02 09:59 | 2026-06-30 23:55 |
 
-> **GBPUSD OANDA `.pro` (feed alternativ):** `GBPUSD_M1_OANDApro_2024_2026.csv` — 981,958 bare, **2024-01-01 → 2026-08-24**. Același format, dar prețurile vin din brokerul **OANDA** (simbolul `GBPUSD.pro`), nu RoboForex. E feed-ul canonic pentru strategia No-Wick (determinarea `no-wick` depinde de prețurile exacte OANDA). Spread = 0 și aici.
+## OANDA `.pro` — feed alternativ (6 perechi)
+
+Aceleași 6 perechi, dar prețurile vin din brokerul **OANDA** (simbolurile `.pro`), nu RoboForex. E feed-ul canonic pentru strategia No-Wick (determinarea `no-wick` depinde de prețurile exacte OANDA). Acoperire: **2024-01-01 → 2026-08-24**. Spread = 0 și aici.
+
+| Fișier | Bare | Start | Sfârșit |
+| --- | --- | --- | --- |
+| `AUDJPY_M1_OANDApro_2024_2026.csv` | 980,772 | 2024-01-01 23:05 | 2026-08-24 23:58 |
+| `AUDUSD_M1_OANDApro_2024_2026.csv` | 982,204 | 2024-01-01 23:05 | 2026-08-24 23:59 |
+| `EURUSD_M1_OANDApro_2024_2026.csv` | 982,244 | 2024-01-01 23:05 | 2026-08-24 23:59 |
+| `GBPJPY_M1_OANDApro_2024_2026.csv` | 980,725 | 2024-01-01 23:05 | 2026-08-24 23:59 |
+| `GBPUSD_M1_OANDApro_2024_2026.csv` | 981,958 | 2024-01-01 23:05 | 2026-08-24 23:59 |
+| `USDJPY_M1_OANDApro_2024_2026.csv` | 982,090 | 2024-01-01 23:05 | 2026-08-24 23:59 |
 
 ## Format coloane
 
