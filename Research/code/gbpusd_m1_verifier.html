@@ -40,6 +40,8 @@
 <header>
   <h1>Verificare vizuală M1 · MSS / BOS / FVG ▼</h1>
   <select id="winSel"></select>
+  <button id="prevBtn" title="Fereastra anterioară (săgeată stânga pe chart cu mouse-ul? nu — buton)">◀</button>
+  <button id="nextBtn" title="Fereastra următoare">▶</button>
   <span class="sp"></span>
   <label class="muted">MSS/BOS swing <span id="swVal">7</span></label>
   <input type="range" id="swing" min="3" max="15" value="7" style="width:90px">
@@ -70,7 +72,11 @@
   <button id="blindBtn" title="Lookahead ON: viitorul e ascuns — dezvălui cu +10/+60 sau Play">🔒 Lookahead ON</button>
   <button id="laPlaceBtn" title="📏 Pune linia de lookahead: click pe chart = linia acolo (o dată)">📏 Bara</button>
   <button id="replayResetBtn" title="⟲ Vezi tot chart-ul (oprește playback)">⟲ Reset</button>
+  <button id="laDefBtn" title="💾 Salvează poziția ACTUALĂ de lookahead ca default pentru această fereastră — 🔒 Lookahead ON o va restaura">🏁 Def</button>
   <span class="muted" id="replayInfo" style="min-width:120px"></span>
+  <span style="width:1px;height:20px;background:var(--line);display:inline-block;margin:0 6px"></span>
+  <button class="primary" id="passNextBtn" title="Salvează PASS și treci automat la fereastra următoare">PASS →</button>
+  <button class="danger" id="skipNextBtn" title="Salvează SKIP și treci automat la fereastra următoare">SKIP →</button>
 </header>
 
 <div class="main">
@@ -347,7 +353,6 @@ function computeYRange(c, x0, x1, sl, tp, pf) {
 function makeXS(v, mL, pW) { return i => mL + ((i - v.x0) / Math.max(v.x1 - v.x0, 1)) * pW; }
 function makeYS(yMin, yMax, mT, pH) { return p => mT + (1 - (p - yMin) / Math.max(yMax - yMin, 0.0001)) * pH; }
 function fmtP(p, pip) { return p.toFixed(pip >= 0.01 ? 3 : 5); }
-function fmtPi(d, pip) { return (d / pip).toFixed(1); }
 function rMult(e, sl, dist) { if (sl == null || e == null) return null; var sd = Math.abs(e - sl); return sd > 0 ? dist / sd : null; }
 function zAt(v, mf, f, n) { var r = v.x1 - v.x0, nr = Math.max(10, Math.min(n * 3, r * f)), md = v.x0 + mf * r; return { x0: md - mf * nr, x1: md + (1 - mf) * nr }; }
 function pBy(v, dx, pW) { var r = v.x1 - v.x0, d = -(dx / pW) * r; return { x0: v.x0 + d, x1: v.x1 + d }; }
@@ -659,6 +664,9 @@ function startPlay(){
   if (!currentBars.length) return;
   enterBlindIfNeeded();
   if (playing) return;
+  // fix: curățăm orice interval rămas (ex. după advanceWindow care a trecut
+  // prin stopPlay dar a recreat intervalul — altfel ajungeau 2 intervale concurente)
+  if (playTimer){ clearInterval(playTimer); playTimer = null; }
   playing = true; setPlayIcon(true);
   playTimer = setInterval(playTick, REPLAY_TICK_MS);
 }
@@ -701,9 +709,11 @@ function toggleBlind(){
     // Lookahead OFF: vezi tot chart-ul
     blind = false; cutoff = Math.max(currentBars.length - 1, 0);
   } else {
-    // Lookahead ON: ascunde viitorul de la ultima bara vizibila
+    // Lookahead ON: ascunde viitorul; dacă există poziție salvată cu 🏁 Def,
+    // o restaurăm (per fereastră), altfel de la ultima bară vizibilă
     blind = true;
-    cutoff = Math.min(currentBars.length - 1, Math.floor(vw.x1));
+    const ld = readLaDef();
+    cutoff = ld != null ? ld : Math.min(currentBars.length - 1, Math.floor(vw.x1));
   }
   toggleBlindUI();
   render();
@@ -1061,20 +1071,107 @@ document.getElementById('speedSel').addEventListener('input', function(){
 });
 document.getElementById('speedVal').textContent = '1×';
 
+// ---------- taste globale (ca gbpusd_draw.html — Stefan) ----------
+// IMPORTANT (fix Space inconsistent): după click pe un buton din header, acela
+// rămâne FOCUSAT; la keyup-ul lui Space browserul trimite CLICK implicit pe
+// butonul focusat -> toggle dublu (Play+Play = nimic). Rezolvare: preventDefault
+// și pe keyup + blur pe butoane la mousedown + ignorăm tastele când scrii text.
+function isTyping(){
+  const el = document.activeElement;
+  if (!el) return false;
+  const t = el.tagName;
+  return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT';
+}
+
 window.addEventListener('keydown', function(e){
+  if (isTyping()) return;
+  // dacă un buton e focusat, îl scapăm de focus înainte de toggle/click implicit
+  if (document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
   if (e.code === 'Space'){
     e.preventDefault();
     e.stopPropagation();
     if (e.repeat){ playSpeed = Math.min(240, playSpeed + 2); if (playing) reveal(2); }
     else { playSpeed = readSpeedSetting(); togglePlay(); }
+    return;
+  }
+  const k = e.key;
+  if (k === 'a' || k === 'A'){ resetView(); e.preventDefault(); }
+  else if (k === '+' || k === '='){ zoomBy(0.85, 1); e.preventDefault(); }
+  else if (k === '-' || k === '_'){ zoomBy(1.18, 1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
+    const span = Math.max(vw.x1 - vw.x0, 1);
+    const d = span * 0.15 * (e.key === 'ArrowLeft' ? -1 : 1);
+    vw.x0 += d; vw.x1 += d; render();
+    e.preventDefault();
   }
 }, true);
-window.addEventListener('keyup', function(e){ if (e.code === 'Space'){ playSpeed = readSpeedSetting(); } });
+window.addEventListener('keyup', function(e){
+  if (e.code === 'Space'){
+    if (isTyping()) return;
+    e.preventDefault();          // oprește click-ul implicit pe butonul focusat
+    playSpeed = readSpeedSetting();
+  }
+});
 
 function readSpeedSetting(){
   const sp = document.getElementById('speedSel');
   return sp ? (parseInt(sp.value,10) || 1) : 1;
 }
+
+function resetView(){
+  if (!currentBars.length) return;
+  vw.x0 = 0; vw.x1 = Math.max(currentBars.length - 1, 1);
+  render();
+}
+function zoomBy(f, mf){
+  const v = zAt(vw, mf, f, currentBars.length);
+  vw.x0 = v.x0; vw.x1 = v.x1;
+  render();
+}
+
+// ---------- navigare între ferestre + PASS/SKIP cu avans automat ----------
+function winOptionValues(){
+  return Array.prototype.slice.call(document.getElementById('winSel').options)
+    .map(o => o.value).filter(v => v.indexOf('ALL:') !== 0);
+}
+function stepWindow(dir){
+  const vals = winOptionValues();
+  let i = vals.indexOf(String(activeIdx)); if (i < 0) i = 0;
+  i = Math.max(0, Math.min(vals.length - 1, i + dir));
+  const sel = document.getElementById('winSel');
+  sel.value = vals[i];
+  sel.onchange();
+}
+function verdictAndNext(v){
+  const active = getActive();
+  if (!active || active.id === 'ALL') return;
+  verdicts[active.id] = {verdict:v, comment:document.getElementById('comment').value, savedAt:new Date().toISOString(), symbol:active.symbol, window_start:active.window_start, window_end:active.window_end};
+  persist(); renderSaved();
+  stepWindow(1);
+}
+document.getElementById('prevBtn').addEventListener('click', ()=>{ stepWindow(-1); });
+document.getElementById('nextBtn').addEventListener('click', ()=>{ stepWindow(1); });
+document.getElementById('passNextBtn').addEventListener('click', ()=>{ verdictAndNext('PASS'); });
+document.getElementById('skipNextBtn').addEventListener('click', ()=>{ verdictAndNext('SKIP'); });
+
+// ---------- Lookahead default per fereastră (🏁 Def, ca gbpusd_draw) ----------
+function readLaDef(){
+  const active = getActive();
+  if (!active || active.id === 'ALL') return null;
+  try {
+    const v = parseInt(localStorage.getItem('laDef_' + active.id), 10);
+    return isFinite(v) && v >= 0 ? Math.min(v, currentBars.length - 1) : null;
+  } catch(e){ return null; }
+}
+document.getElementById('laDefBtn').addEventListener('click', ()=>{
+  const active = getActive();
+  if (!active || active.id === 'ALL'){ alert('Disponibil doar pe ferestre individuale.'); return; }
+  try{ localStorage.setItem('laDef_' + active.id, String(cutoff)); }catch(e){}
+  alert('Poziția lookahead (bara ' + (cutoff + 1) + ') salvată ca default pentru fereastra #' + active.id + '.');
+});
+
+// butoanele din header nu rămân focusate după click cu mouse-ul (fix Space)
+document.querySelectorAll('header button').forEach(b => b.addEventListener('mousedown', function(){ this.blur(); }));
 
 function persist(){ try{ localStorage.setItem('m1verdicts', JSON.stringify(verdicts)); }catch(e){} }
 function loadPersist(){ try{ const s=localStorage.getItem('m1verdicts'); if (s) verdicts=JSON.parse(s); }catch(e){} }
