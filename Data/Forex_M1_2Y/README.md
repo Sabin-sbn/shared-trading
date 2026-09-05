@@ -14,6 +14,8 @@ Date M1 (1 minut) pentru 7 perechi forex majore, exportate din MetaTrader 5 (pip
 | `USDCHF_M1_2024_2026.csv` | 916,189 | 2024-01-02 09:59 | 2026-06-30 23:55 |
 | `USDJPY_M1_2024_2026.csv` | 917,081 | 2024-01-02 09:59 | 2026-06-30 23:55 |
 
+> **GBPUSD OANDA `.pro` (feed alternativ):** `GBPUSD_M1_OANDApro_2024_2026.csv` — 981,958 bare, **2024-01-01 → 2026-08-24**. Același format, dar prețurile vin din brokerul **OANDA** (simbolul `GBPUSD.pro`), nu RoboForex. E feed-ul canonic pentru strategia No-Wick (determinarea `no-wick` depinde de prețurile exacte OANDA). Spread = 0 și aici.
+
 ## Format coloane
 
 `Datetime,Open,High,Low,Close,Volume,Spread,RealVolume`
