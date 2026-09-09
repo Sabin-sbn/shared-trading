@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OANDA Share CFDs — Chart Review (Pass/Skip)</title>
+<style>
+  :root {
+    --bg: #0e1117; --panel: #161b22; --line: #30363d; --txt: #e6edf3;
+    --muted: #8b949e; --up: #3fb68b; --down: #ff5252; --accent: #58a6ff;
+    --pass: #238636; --skip: #da3633; --maybe: #9e6a03;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--txt); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Header */
+  header { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 15px; white-space: nowrap; }
+  header select, header input[type="number"] { background: #0d1117; color: var(--txt); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 12px; }
+  .sp { flex: 1; }
+  .muted { color: var(--muted); font-size: 12px; }
+  label.muted { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+  button { background: #21262d; color: var(--txt); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; transition: filter .12s; }
+  button:hover { filter: brightness(1.2); }
+  button.primary { background: var(--pass); border-color: #2ea043; color: #fff; }
+  button.danger { background: var(--skip); border-color: #f85149; color: #fff; }
+  button.warn { background: var(--maybe); border-color: #d29922; color: #fff; }
+  button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* Main layout */
+  .main { display: flex; flex: 1; min-height: 0; }
+  .chart-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #chartWrap { flex: 1; position: relative; background: #000; border: 1px solid var(--line); margin: 8px; border-radius: 8px; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+  /* OHLC info bar */
+  #ohlcBar { position: absolute; top: 6px; left: 10px; font-size: 11px; z-index: 5; pointer-events: none; display: flex; gap: 12px; }
+  #ohlcBar span { background: rgba(22,27,34,0.85); padding: 2px 6px; border-radius: 4px; }
+  #ohlcBar .sym { font-weight: 700; color: var(--accent); }
+
+  /* Crosshair price label */
+  #crossPrice { position: absolute; right: 0; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; pointer-events: none; z-index: 6; display: none; }
+
+  /* Sidebar */
+  .sidebar { width: 320px; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow-y: auto; }
+  .sidebar.collapsed { width: 0; overflow: hidden; border: none; }
+  .card { padding: 12px; border-bottom: 1px solid var(--line); }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 8px; }
+
+  /* Pair info */
+  .pair-info { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 12px; }
+  .pair-info .lbl { color: var(--muted); }
+  .pair-info .val { font-weight: 600; }
+
+  /* Navigation */
+  .nav-row { display: flex; gap: 6px; align-items: center; }
+  .nav-row button { flex: 1; padding: 8px; font-size: 13px; font-weight: 600; }
+  .nav-row .counter { font-size: 12px; color: var(--muted); text-align: center; min-width: 60px; }
+
+  /* Verdict buttons */
+  .verdict-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .verdict-row button { flex: 1; padding: 10px; font-size: 13px; font-weight: 700; border-radius: 8px; }
+  .verdict-row button.active { outline: 2px solid #fff; outline-offset: 2px; }
+
+  /* Comment */
+  textarea { width: 100%; min-height: 60px; background: #0d1117; color: var(--txt); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 12px; font-family: inherit; resize: vertical; }
+
+  /* Save row */
+  .save-row { display: flex; gap: 6px; margin-top: 8px; }
+  .save-row button { flex: 1; padding: 8px; }
+
+  /* Stats */
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stat-box { background: #0d1117; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; text-align: center; flex: 1; min-width: 70px; }
+  .stat-box .num { font-size: 18px; font-weight: 700; }
+  .stat-box .lbl { font-size: 10px; color: var(--muted); }
+  .stat-box.pass .num { color: var(--pass); }
+  .stat-box.skip .num { color: var(--skip); }
+  .stat-box.maybe .num { color: var(--maybe); }
+
+  /* Saved list */
+  .saved-list { max-height: 200px; overflow-y: auto; font-size: 11px; }
+  .saved-list div { padding: 3px 6px; border-bottom: 1px solid var(--line); display: flex; gap: 6px; align-items: center; }
+  .saved-list .vpass { color: var(--pass); font-weight: 700; }
+  .saved-list .vskip { color: var(--skip); font-weight: 700; }
+  .saved-list .vmaybe { color: var(--maybe); font-weight: 700; }
+
+  /* File drop zone */
+  #dropZone { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; height: 100%; color: var(--muted); }
+  #dropZone.dragover { background: rgba(88,166,255,0.08); }
+  #dropZone .icon { font-size: 48px; }
+  #dropZone .hint { font-size: 13px; }
+  #fileInput { display: none; }
+
+  /* Banner anti-Obsidian: vizibil DOAR daca JS nu ruleaza (Obsidian) — JS il sterge instant */
+  #obsidianWarn { position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+                  background: #f0b90b; color: #131722; font-weight: 700; font-size: 14px;
+                  padding: 10px 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  #obsidianWarn b { text-decoration: underline; }
+
+  /* Keyboard hint */
+  kbd { background: #21262d; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-size: 10px; font-family: inherit; }
+
+  /* Replay bar (jos, centrat — ca la Stefan/gbpusd_draw) */
+  #replaybar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 7;
+               display: flex; gap: 3px; align-items: center; background: rgba(22,27,34,0.92);
+               border: 1px solid var(--line); border-radius: 8px; padding: 3px 6px; }
+  #replaybar button { background: none; border: none; color: var(--txt); cursor: pointer; padding: 4px 8px;
+                      border-radius: 6px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+  #replaybar button:hover { background: #363a45; color: #fff; }
+  #replaybar button.on { background: var(--accent); color: #fff; }
+  #replaybar .rsep { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
+  #replaybar .rspd { font-size: 10px; color: #ffa726; font-weight: 700; min-width: 34px; text-align: center; }
+  #replaybar .rcut { font-size: 10px; color: var(--muted); white-space: nowrap; }
+  #replaybar .rcut b { color: var(--accent); }
+  /* Play ca la Claude: verde când oprit, chihlimbar când rulează */
+  #replaybar #playBtn { background: #26a69a; color: #fff; border-radius: 6px; }
+  #replaybar #playBtn.on { background: #f0b90b; color: #131722; }
+
+  /* Chip status blind in ohlcBar */
+  #blindChip { font-weight: 700; }
+  #blindChip.on { color: #ffa726; }
+  #blindChip.off { color: var(--up); }
+</style>
+</head>
+<body>
+
+<div id="obsidianWarn">⚠️ Tool-ul ăsta trebuie deschis <b>ÎN BROWSER</b> (dublu-clic pe <b>Deschide_Reviewer.bat</b>), nu în Obsidian — aici JavaScript nu rulează.</div>
+
+<header>
+  <h1>OANDA Share CFDs Review</h1>
+  <select id="pairSelect"><option value="">— încarcă un CSV —</option></select>
+  <label class="muted">
+    TF:
+    <select id="tfSelect">
+      <option value="M1">M1</option>
+      <option value="M5">M5</option>
+      <option value="M15" selected>M15</option>
+      <option value="M30">M30</option>
+      <option value="H1">H1</option>
+      <option value="H4">H4</option>
+      <option value="D">D</option>
+    </select>
+  </label>
+  <label class="muted">
+    BARS:
+    <input type="number" id="windowSize" value="200" min="50" max="2000" step="50" style="width:60px">
+  </label>
+  <span class="sp"></span>
+  <label class="muted"><kbd>Ctrl</kbd>+<kbd>Space</kbd> rulare (mouse pe chart)</label>
+  <label class="muted"><kbd>←</kbd><kbd>→</kbd> navigare</label>
+  <label class="muted"><kbd>P</kbd> Pass <kbd>S</kbd> Skip <kbd>M</kbd> Maybe</label>
+  <button id="toggleSidebar">Panel ▸</button>
+</header>
+
+<div class="main">
+  <div class="chart-area">
+    <div id="chartWrap">
+      <div id="ohlcBar"></div>
+      <div id="crossPrice"></div>
+      <canvas id="canvas"></canvas>
+      <div id="dropZone">
+        <div class="icon">📁</div>
+        <div class="hint">Drag & drop CSV aici — sau <button id="browseBtn">click să selectezi</button></div>
+        <div class="muted">Format: Datetime,Open,High,Low,Close,Volume (sau cu Complete)</div>
+        <input type="file" id="fileInput" accept=".csv">
+      </div>
+      <div id="replaybar">
+        <button id="playBtn" title="Play/Pause — dezvăluie candele (Ctrl+Space cu mouse-ul pe chart, ține apăsat = accelerare)">▶ Replay</button>
+        <button id="resetBtn" title="Reset — oprește și arată tot chart-ul de la început">⟲ Reset</button>
+        <button id="blindBtn" title="Lookahead ON/OFF — ascunde/dezvăluie viitorul" class="on">🔒</button>
+        <span class="rsep"></span>
+        <button id="r1" title="Dezvăluie 1 candelă">+1</button>
+        <button id="r10" title="Dezvăluie 10 candele">+10</button>
+        <button id="r60" title="Dezvăluie 60 candele">+60</button>
+        <span class="rsep"></span>
+        <span class="rspd" id="playSpeedLabel"></span>
+        <span class="rcut" id="cutLabel"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar" id="sidebar">
+    <!-- Pair info -->
+    <div class="card" id="pairCard" style="display:none">
+      <h2>Instrument</h2>
+      <div class="pair-info" id="pairInfo"></div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="card" id="navCard" style="display:none">
+      <h2>Navigare</h2>
+      <div class="nav-row">
+        <button id="btnFirst">⏮</button>
+        <button id="btnPrev">◀</button>
+        <span class="counter" id="navCounter">0 / 0</span>
+        <button id="btnNext">▶</button>
+        <button id="btnLast">⏭</button>
+      </div>
+      <div style="margin-top:8px">
+        <input type="range" id="slider" min="0" max="0" value="0" style="width:100%">
+      </div>
+    </div>
+
+    <!-- Verdict -->
+    <div class="card" id="verdictCard" style="display:none">
+      <h2>Verdict</h2>
+      <div class="verdict-row">
+        <button class="primary" data-v="PASS">PASS ✓</button>
+        <button class="danger" data-v="SKIP">SKIP ✗</button>
+        <button class="warn" data-v="MAYBE">Maybe ?</button>
+      </div>
+      <textarea id="comment" placeholder="Comentariu (opțional)..."></textarea>
+      <div class="save-row">
+        <button class="primary" id="saveBtn">Salvează verdictul</button>
+        <button id="nextAutoBtn" title="Salvează și mergi la următorul">Salvează ▶</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card" id="statsCard" style="display:none">
+      <h2>Statistici</h2>
+      <div class="stats">
+        <div class="stat-box pass"><div class="num" id="statPass">0</div><div class="lbl">PASS</div></div>
+        <div class="stat-box skip"><div class="num" id="statSkip">0</div><div class="lbl">SKIP</div></div>
+        <div class="stat-box maybe"><div class="num" id="statMaybe">0</div><div class="lbl">MAYBE</div></div>
+        <div class="stat-box"><div class="num" id="statTotal">0</div><div class="lbl">Total</div></div>
+      </div>
+    </div>
+
+    <!-- Saved verdicts -->
+    <div class="card" id="savedCard" style="display:none">
+      <h2>Verdicte salvate</h2>
+      <div class="saved-list" id="savedList"></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button id="exportBtn" style="flex:1">Export JSON</button>
+        <button id="clearBtn" class="danger" style="flex:1">Șterge toate</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="gbpusd_m1_2024_2026.js"></script>
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+// JS rulează → am ajuns în browser → șterg bannerul anti-Obsidian
+document.getElementById('obsidianWarn')?.remove();
+let candles = [];       // [{t, o, h, l, c, v}]
+let currentIdx = 0;
+let windowSize = 200;
+let verdicts = {};      // idx -> {verdict, comment, time}
+let activeVerdict = null;
+let pairName = '';
+let tfName = 'M15';
+
+// ---- PLAYBACK (ca la Stefan/gbpusd_draw): blind/lookahead + play + reveal ----
+let blind = true;            // ascunde viitorul (candele > cutoff NU se desenează deloc — ca Bar Replay)
+let cutoff = -1;             // ultima candela dezvăluită (index global în candles)
+let playing = false, playTimer = null, playSpeed = 1;
+
+function lastRevealedIdx() { return blind ? Math.min(cutoff, candles.length - 1) : candles.length - 1; }
+function setCutoffFromView() { cutoff = Math.min(candles.length - 1, currentIdx + windowSize - 1); }
+
+// Ca la Claude: ține playhead-ul vizibil fără să schimbe zoom-ul (păstrează width-ul,
+// mută doar view-ul astfel încât cutoff să rămână la 85% din lățimea vizibilă)
+function followViewToReveal() {
+  const maxStart = Math.max(0, candles.length - windowSize);
+  const margin = Math.round(windowSize * 0.15);
+  if (currentIdx + windowSize - margin < cutoff) {
+    currentIdx = Math.min(maxStart, cutoff - (windowSize - margin));
+    updateNav();
+  }
+}
+
+function reveal(n) {
+  if (!blind || !candles.length) return;
+  cutoff = Math.min(candles.length - 1, cutoff + n);
+  followViewToReveal();
+  draw();
+}
+
+// ============================================================
+//  AUTO-LOAD: gbpusd_m1_2024_2026.js (daca exista langa HTML)
+//  Format: window.GBPUSD_M1_2024_2026 = [[ts,o,h,l,c,v], ...]
+// ============================================================
+function useExternalData() {
+  const raw = window.GBPUSD_M1_2024_2026;
+  if (!raw || !Array.isArray(raw) || raw.length === 0) return false;
+  candles = raw.map(r => ({
+    t: r[0], o: r[1], h: r[2], l: r[3], c: r[4], v: r[5],
+    dt: new Date(r[0] * 1000).toISOString().slice(0, 19).replace('T', ' '),
+  }));
+  pairName = 'GBPUSD';
+  tfName = 'M1';
+  if (tfName === 'M1') windowSize = 480;   // ~8 ore de M1 pe ecran
+  document.getElementById('windowSize').value = windowSize;
+  document.getElementById('pairSelect').innerHTML =
+    `<option value="g">GBPUSD · M1 · 2024–2026 (${candles.length.toLocaleString()} bare)</option>`;
+  dropZone.style.display = 'none';
+  stopPlay();
+  blind = true;
+  setCutoffFromView();
+  updateReplayUI();
+  showUI();
+  updatePairInfo();
+  draw();
+  return true;
+}
+
+// Auto-load DUPĂ ce tot scriptul e evaluat (evită TDZ: DOM refs sunt const declarate mai jos,
+// iar useExternalData→updateReplayUI/draw/updateNav le folosesc la prima încărcare)
+function autoLoad() {
+  if (window.GBPUSD_M1_2024_2026) {
+    useExternalData();
+  } else {
+    // Datele lipsesc → mesaj clar (nu pagină moartă): OneDrive poate nu a sincronizat
+    const hint = document.querySelector('#dropZone .hint');
+    const dz = document.getElementById('dropZone');
+    if (hint && dz) {
+      hint.innerHTML = '⚠️ <b>Datele nu s-au încărcat!</b> Caută <code>gbpusd_m1_2024_2026.js</code> lângă acest fișier — poate OneDrive nu l-a sincronizat (41 MB). Trage un CSV aici sau verifică fișierul.';
+      dz.querySelector('.muted').textContent = '';
+    }
+  }
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', autoLoad);
+} else {
+  autoLoad();
+}
+
+// ============================================================
+//  DOM
+// ============================================================
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const fileInput = document.getElementById('fileInput');
+const ohlcBar = document.getElementById('ohlcBar');
+const crossPrice = document.getElementById('crossPrice');
+const slider = document.getElementById('slider');
+const navCounter = document.getElementById('navCounter');
+const sidebar = document.getElementById('sidebar');
+
+// ============================================================
+//  FILE LOADING
+// ============================================================
+document.getElementById('browseBtn').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+// Drag & drop
+document.getElementById('chartWrap').addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+document.getElementById('chartWrap').addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+document.getElementById('chartWrap').addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+function loadFile(file) {
+  const name = file.name.replace(/\.csv$/i, '');
+  // Guess pair name and TF from filename
+  const parts = name.split('_');
+  pairName = parts[0] || name;
+  tfName = parts.find(p => /^(M1|M5|M15|M30|H1|H4|D|W)$/.test(p)) || 'M15';
+  if (tfName === 'M1') windowSize = 480;
+  document.getElementById('windowSize').value = windowSize;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    parseCSV(e.target.result);
+    document.getElementById('pairSelect').innerHTML =
+      `<option value="${pairName}">${pairName} · ${tfName} (${candles.length.toLocaleString()} bare)</option>`;
+    dropZone.style.display = 'none';
+    stopPlay();
+    blind = true;
+    setCutoffFromView();
+    updateReplayUI();
+    showUI();
+    updatePairInfo();
+    draw();
+  };
+  reader.readAsText(file);
+}
+
+// Also load from drag-drop on page level
+document.body.addEventListener('dragover', e => e.preventDefault());
+document.body.addEventListener('drop', e => {
+  e.preventDefault();
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return;
+  const header = lines[0].toLowerCase();
+  const hasComplete = header.includes('complete');
+  candles = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    if (cols.length < 6) continue;
+    const dt = cols[0].trim();
+    const o = parseFloat(cols[1]);
+    const h = parseFloat(cols[2]);
+    const l = parseFloat(cols[3]);
+    const c = parseFloat(cols[4]);
+    const v = parseInt(cols[5]) || 0;
+    if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(c)) continue;
+    // Parse datetime to timestamp
+    let ts;
+    try {
+      ts = new Date(dt.replace(' ', 'T') + (dt.includes('Z') ? '' : 'Z')).getTime();
+    } catch { ts = i; }
+    candles.push({ t: ts, o, h, l, c, v, dt });
+  }
+  // Load existing verdicts from localStorage
+  loadVerdicts();
+}
+
+// ============================================================
+//  UI HELPERS
+// ============================================================
+function showUI() {
+  ['pairCard', 'navCard', 'verdictCard', 'statsCard', 'savedCard'].forEach(id => {
+    document.getElementById(id).style.display = '';
+  });
+  slider.max = Math.max(0, candles.length - windowSize);
+  currentIdx = 0;
+  slider.value = 0;
+  updateNav();
+  updateStats();
+  updateSavedList();
+}
+
+function updatePairInfo() {
+  const info = document.getElementById('pairInfo');
+  if (!candles.length) { info.innerHTML = ''; return; }
+  const first = candles[0];
+  const last = candles[candles.length - 1];
+  // Buclă — NU spread (...) pe 917k elemente (RangeError: Maximum call stack size exceeded)
+  let hi = candles[0].h, lo = candles[0].l;
+  for (let i = 1; i < candles.length; i++) {
+    if (candles[i].h > hi) hi = candles[i].h;
+    if (candles[i].l < lo) lo = candles[i].l;
+  }
+  info.innerHTML = `
+    <span class="lbl">Simbol:</span><span class="val" style="color:var(--accent)">${pairName}</span>
+    <span class="lbl">Timeframe:</span><span class="val">${tfName}</span>
+    <span class="lbl">Bare:</span><span class="val">${candles.length.toLocaleString()}</span>
+    <span class="lbl">De la:</span><span class="val">${formatDt(first.t)}</span>
+    <span class="lbl">Până la:</span><span class="val">${formatDt(last.t)}</span>
+    <span class="lbl">High:</span><span class="val" style="color:var(--up)">${hi.toFixed(5)}</span>
+    <span class="lbl">Low:</span><span class="val" style="color:var(--down)">${lo.toFixed(5)}</span>
+  `;
+}
+
+function formatDt(ts) {
+  if (ts < 1e11) ts *= 1000;  // timestamp UNIX în secunde → milisecunde (candelele din date au t în secunde)
+  const d = new Date(ts);
+  return d.toISOString().slice(0, 16).replace('T', ' ');
+}
+
+// ============================================================
+//  NAVIGATION
+// ============================================================
+function updateNav() {
+  const maxIdx = Math.max(0, candles.length - windowSize);
+  navCounter.textContent = `${currentIdx + 1}–${Math.min(currentIdx + windowSize, candles.length)} / ${candles.length}`;
+  slider.value = currentIdx;
+  slider.max = maxIdx;
+}
+
+document.getElementById('btnFirst').addEventListener('click', () => { currentIdx = 0; updateNav(); draw(); });
+document.getElementById('btnLast').addEventListener('click', () => { currentIdx = Math.max(0, candles.length - windowSize); updateNav(); draw(); });
+document.getElementById('btnPrev').addEventListener('click', () => { currentIdx = Math.max(0, currentIdx - Math.floor(windowSize / 2)); updateNav(); draw(); });
+document.getElementById('btnNext').addEventListener('click', () => { currentIdx = Math.min(candles.length - windowSize, currentIdx + Math.floor(windowSize / 2)); updateNav(); draw(); });
+slider.addEventListener('input', () => { currentIdx = parseInt(slider.value); updateNav(); draw(); });
+document.getElementById('windowSize').addEventListener('change', e => { windowSize = parseInt(e.target.value) || 200; slider.max = Math.max(0, candles.length - windowSize); updateNav(); draw(); });
+document.getElementById('toggleSidebar').addEventListener('click', () => { sidebar.classList.toggle('collapsed'); setTimeout(() => draw(), 200); });
+
+// ============================================================
+//  PLAYBACK — blind/lookahead + play + reveal (ca la Stefan)
+// ============================================================
+const playBtn = document.getElementById('playBtn');
+const blindBtn = document.getElementById('blindBtn');
+const playSpeedLabel = document.getElementById('playSpeedLabel');
+const cutLabel = document.getElementById('cutLabel');
+
+function updateReplayUI() {
+  // Play button (verde când oprit → chihlimbar când rulează, ca la Claude)
+  playBtn.textContent = playing ? '⏸ Pause' : '▶ Replay';
+  playBtn.classList.toggle('on', playing);
+  // Blind icon/state
+  blindBtn.textContent = blind ? '🔒' : '🔓';
+  blindBtn.classList.toggle('on', blind);
+  blindBtn.title = blind
+    ? 'Lookahead ON: viitorul e ascuns — dezvălui cu +1/+10/+60 sau Play'
+    : 'Lookahead OFF: vezi tot chart-ul — apasă ca să ascunzi viitorul';
+  // Speed
+  playSpeedLabel.textContent = playing && playSpeed > 1 ? '×' + playSpeed : (playSpeed > 1 ? '×' + playSpeed : '');
+  // Cutoff label
+  if (candles.length) {
+    const c = candles[lastRevealedIdx()];
+    cutLabel.innerHTML = blind
+      ? `cutoff <b>${(c ? formatDt(c.t) : '')}</b>`
+      : 'tot chart-ul vizibil';
+  }
+}
+
+function startPlay() {
+  if (!candles.length) return;
+  if (!blind) { blind = true; setCutoffFromView(); }
+  // Ca la Claude: dacă replay-ul a ajuns la final, reia de la început
+  // (reveal mic inițial + view resetat la 0)
+  if (cutoff >= candles.length - 1) {
+    cutoff = Math.max(5, Math.min(20, candles.length - 1));
+    currentIdx = 0;
+    updateNav();
+  }
+  playing = true;
+  updateReplayUI();
+  playTimer = setInterval(() => {
+    if (cutoff >= candles.length - 1) { stopPlay(); return; }
+    reveal(playSpeed);
+    if (playSpeed > 1 && cutoff < candles.length - 1) reveal(playSpeed - 1);  // accelerare: mai multe candele pe tick
+    updateReplayUI();
+  }, 180);
+}
+
+function stopPlay() {
+  playing = false;
+  if (playTimer) { clearInterval(playTimer); playTimer = null; }
+  updateReplayUI();
+}
+
+function togglePlay() { playing ? stopPlay() : startPlay(); }
+
+// Reset (ca la Claude): oprește play-ul, arată tot chart-ul, view la început
+function resetReplay() {
+  stopPlay();
+  playSpeed = 1;
+  blind = true;
+  cutoff = candles.length - 1;
+  currentIdx = 0;
+  updateNav();
+  updateReplayUI();
+  draw();
+}
+
+function toggleBlind() {
+  if (blind) {
+    blind = false; cutoff = candles.length - 1;
+  } else {
+    blind = true; setCutoffFromView();
+  }
+  updateReplayUI();
+  draw();
+}
+
+playBtn.addEventListener('click', togglePlay);
+document.getElementById('resetBtn').addEventListener('click', resetReplay);
+blindBtn.addEventListener('click', toggleBlind);
+function revealBtn(n) { reveal(n); updateReplayUI(); }
+document.getElementById('r1').addEventListener('click', () => revealBtn(1));
+document.getElementById('r10').addEventListener('click', () => revealBtn(10));
+document.getElementById('r60').addEventListener('click', () => revealBtn(60));
+
+// Keyboard shortcuts
+function handlePlayKey(repeat) {
+  // Ctrl+Space (sau Space simplu) = Play/Pause · ține apăsat = accelerare (ca la Stefan)
+  if (repeat) {
+    playSpeed = Math.min(60, playSpeed + 2);
+    if (playing) reveal(2);
+    updateReplayUI();
+  } else {
+    playSpeed = 1;
+    togglePlay();
+  }
+}
+
+// Keyboard shortcuts — ca la Claude: Ctrl+Space pornește/oprește DOAR
+// când mouse-ul este deasupra chart-ului (evită conflicte cu alte panouri/aplicații)
+let chartHover = false;
+const chartWrapEl = document.getElementById('chartWrap');
+chartWrapEl.addEventListener('mouseenter', () => chartHover = true);
+chartWrapEl.addEventListener('mouseleave', () => chartHover = false);
+
+document.addEventListener('keydown', e => {
+  const inField = e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT';
+  // Ctrl+Space (sau Space simplu) = Play/Pause — doar când mouse-ul e pe chart
+  if (e.code === 'Space' && chartHover) {
+    e.preventDefault();
+    handlePlayKey(e.repeat);
+    return;
+  }
+  if (inField) return;
+  if (e.key === 'ArrowLeft') { currentIdx = Math.max(0, currentIdx - Math.floor(windowSize / 2)); updateNav(); draw(); }
+  else if (e.key === 'ArrowRight') { currentIdx = Math.min(candles.length - windowSize, currentIdx + Math.floor(windowSize / 2)); updateNav(); draw(); }
+  else if (e.key === 'p' || e.key === 'P') { setVerdict('PASS'); }
+  else if (e.key === 's' || e.key === 'S') { setVerdict('SKIP'); }
+  else if (e.key === 'm' || e.key === 'M') { setVerdict('MAYBE'); }
+  else if (e.key === 'Enter' && e.ctrlKey) { saveVerdict(true); }
+  else if (e.key === 'l' || e.key === 'L') { toggleBlind(); }
+});
+
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space') { playSpeed = 1; updateReplayUI(); }
+});
+
+// ============================================================
+//  VERDICTS
+// ============================================================
+function setVerdict(v) {
+  activeVerdict = v;
+  document.querySelectorAll('.verdict-row button').forEach(b => {
+    b.classList.toggle('active', b.dataset.v === v);
+  });
+}
+
+document.querySelectorAll('.verdict-row button').forEach(b => {
+  b.addEventListener('click', () => setVerdict(b.dataset.v));
+});
+
+document.getElementById('saveBtn').addEventListener('click', () => saveVerdict(false));
+document.getElementById('nextAutoBtn').addEventListener('click', () => saveVerdict(true));
+
+function saveVerdict(autoNext) {
+  if (!activeVerdict) { alert('Alege PASS, SKIP sau MAYBE înainte de a salva.'); return; }
+  const key = `${currentIdx}-${currentIdx + windowSize}`;
+  verdicts[key] = {
+    verdict: activeVerdict,
+    comment: document.getElementById('comment').value.trim(),
+    time: new Date().toISOString(),
+    barFrom: candles[currentIdx]?.dt,
+    barTo: candles[Math.min(currentIdx + windowSize - 1, candles.length - 1)]?.dt,
+  };
+  saveVerdicts();
+  updateStats();
+  updateSavedList();
+  document.getElementById('comment').value = '';
+  activeVerdict = null;
+  document.querySelectorAll('.verdict-row button').forEach(b => b.classList.remove('active'));
+  if (autoNext) {
+    currentIdx = Math.min(candles.length - windowSize, currentIdx + windowSize);
+    updateNav();
+    draw();
+  }
+}
+
+function saveVerdicts() {
+  try { localStorage.setItem('oanda_verdicts_' + pairName, JSON.stringify(verdicts)); } catch {}
+}
+function loadVerdicts() {
+  try { verdicts = JSON.parse(localStorage.getItem('oanda_verdicts_' + pairName) || '{}'); } catch { verdicts = {}; }
+}
+
+function updateStats() {
+  let p = 0, s = 0, m = 0;
+  for (const v of Object.values(verdicts)) {
+    if (v.verdict === 'PASS') p++;
+    else if (v.verdict === 'SKIP') s++;
+    else m++;
+  }
+  document.getElementById('statPass').textContent = p;
+  document.getElementById('statSkip').textContent = s;
+  document.getElementById('statMaybe').textContent = m;
+  document.getElementById('statTotal').textContent = p + s + m;
+}
+
+function updateSavedList() {
+  const el = document.getElementById('savedList');
+  const keys = Object.keys(verdicts).sort((a, b) => {
+    const ai = parseInt(a.split('-')[0]);
+    const bi = parseInt(b.split('-')[0]);
+    return ai - bi;
+  });
+  el.innerHTML = keys.map(k => {
+    const v = verdicts[k];
+    const cls = v.verdict === 'PASS' ? 'vpass' : v.verdict === 'SKIP' ? 'vskip' : 'vmaybe';
+    return `<div>
+      <span class="${cls}">${v.verdict}</span>
+      <span style="color:var(--muted)">${v.barFrom || ''}</span>
+      <span style="flex:1;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.comment || ''}</span>
+    </div>`;
+  }).join('');
+}
+
+// Export JSON
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const data = Object.entries(verdicts).map(([k, v]) => ({
+    window: k,
+    ...v,
+  }));
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `verdicts_${pairName}_${tfName}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// Clear all
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!confirm('Ștergi toate verdicturile pentru acest instrument?')) return;
+  verdicts = {};
+  saveVerdicts();
+  updateStats();
+  updateSavedList();
+});
+
+// ============================================================
+//  CHART DRAWING
+// ============================================================
+let dpr = window.devicePixelRatio || 1;
+
+function resize() {
+  const wrap = document.getElementById('chartWrap');
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+}
+window.addEventListener('resize', () => { resize(); draw(); });
+
+function draw() {
+  resize();
+  if (!candles.length) return;
+  const W = canvas.width;
+  const H = canvas.height;
+  const pad = { top: 30, right: 60, bottom: 24, left: 8 };
+  const cw = W - pad.left - pad.right;
+  const ch = H - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.scale(dpr, dpr);
+  const dW = W / dpr;
+  const dH = H / dpr;
+  const dcw = dW - pad.left - pad.right;
+  const dch = dH - pad.top - pad.bottom;
+
+  // Slice
+  const start = currentIdx;
+  const end = Math.min(start + windowSize, candles.length);
+  const slice = candles.slice(start, end);
+  if (!slice.length) return;
+
+  // Price range
+  let pH = -Infinity, pL = Infinity;
+  for (const c of slice) { if (c.h > pH) pH = c.h; if (c.l < pL) pL = c.l; }
+  const margin = (pH - pL) * 0.05 || 0.001;
+  pH += margin; pL -= margin;
+  const priceRange = pH - pL;
+
+  const barW = dcw / slice.length;
+  const bodyW = Math.max(1, barW * 0.7);
+
+  function y(price) { return pad.top + (1 - (price - pL) / priceRange) * dch; }
+  function x(i) { return pad.left + (i + 0.5) * barW; }
+
+  // Grid lines
+  ctx.strokeStyle = '#1e222d';
+  ctx.lineWidth = 0.5;
+  const nLines = 8;
+  for (let i = 0; i <= nLines; i++) {
+    const price = pL + (priceRange * i / nLines);
+    const yy = y(price);
+    ctx.beginPath(); ctx.moveTo(pad.left, yy); ctx.lineTo(dW - pad.right, yy); ctx.stroke();
+    // Price label
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(price.toFixed(price > 100 ? 2 : 5), dW - pad.right + 4, yy + 3);
+  }
+
+  // Date labels
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'center';
+  const labelEvery = Math.max(1, Math.floor(slice.length / 10));
+  for (let i = 0; i < slice.length; i += labelEvery) {
+    const xx = x(i);
+    const d = new Date(slice[i].t);
+    const label = tfName.startsWith('D') || tfName === 'W'
+      ? d.toISOString().slice(0, 10)
+      : d.toISOString().slice(5, 16).replace('T', ' ');
+    ctx.fillText(label, xx, dH - 4);
+    // Vertical grid
+    ctx.strokeStyle = '#1e222d';
+    ctx.beginPath(); ctx.moveTo(xx, pad.top); ctx.lineTo(xx, dH - pad.bottom); ctx.stroke();
+  }
+
+  // Candles (mecanica blind: candele peste cutoff NU se desenează deloc — ca Bar Replay)
+  let cutoffX = null;
+  for (let i = 0; i < slice.length; i++) {
+    const c = slice[i];
+    const xx = x(i);
+    const globalIdx = start + i;
+    const isFuture = blind && globalIdx > cutoff;
+
+    // Marchează poziția cutoff pentru linia verticală
+    if (isFuture && cutoffX === null) cutoffX = xx;
+    if (isFuture) continue;  // viitor neloial — invizibil
+
+    const bull = c.c >= c.o;
+    const color = bull ? '#3fb68b' : '#ff5252';
+
+    // Wick
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(xx, y(c.h));
+    ctx.lineTo(xx, y(c.l));
+    ctx.stroke();
+
+    // Body
+    const bodyTop = y(Math.max(c.o, c.c));
+    const bodyBot = y(Math.min(c.o, c.c));
+    const bodyH = Math.max(1, bodyBot - bodyTop);
+    ctx.fillStyle = color;
+    ctx.fillRect(xx - bodyW / 2, bodyTop, bodyW, bodyH);
+  }
+
+  // Linia de cutoff (ca la Stefan — granița între dezvăluit și viitor)
+  if (blind && cutoffX !== null) {
+    ctx.strokeStyle = 'rgba(255,167,38,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(cutoffX, pad.top);
+    ctx.lineTo(cutoffX, dH - pad.bottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffa726';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('🔒 cutoff', cutoffX + 4, pad.top + 10);
+  }
+
+  // Verdict overlay — color background stripe for windows that have verdicts
+  for (const [key, v] of Object.entries(verdicts)) {
+    const [from, to] = key.split('-').map(Number);
+    if (to <= start || from >= end) continue;
+    const visFrom = Math.max(from, start);
+    const visTo = Math.min(to, end);
+    const x1 = pad.left + (visFrom - start) * barW;
+    const x2 = pad.left + (visTo - start) * barW;
+    const bgColor = v.verdict === 'PASS' ? 'rgba(35,134,54,0.08)'
+                   : v.verdict === 'SKIP' ? 'rgba(218,54,51,0.08)'
+                   : 'rgba(158,106,3,0.08)';
+    const borderColor = v.verdict === 'PASS' ? 'rgba(35,134,54,0.4)'
+                       : v.verdict === 'SKIP' ? 'rgba(218,54,51,0.4)'
+                       : 'rgba(158,106,3,0.4)';
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(x1, pad.top, x2 - x1, dch);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeRect(x1, pad.top, x2 - x1, dch);
+    ctx.setLineDash([]);
+    // Label
+    ctx.fillStyle = borderColor;
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(v.verdict, x1 + 3, pad.top + 12);
+  }
+
+  // Current window highlight border
+  ctx.strokeStyle = 'rgba(88,166,255,0.3)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(pad.left, pad.top, dcw, dch);
+
+  // OHLC bar update
+  if (slice.length) {
+    const mid = slice[Math.floor(slice.length / 2)];
+    ohlcBar.innerHTML = `
+      <span class="sym">${pairName} · ${tfName}</span>
+      <span>O <b>${mid.o.toFixed(5)}</b></span>
+      <span>H <b style="color:var(--up)">${mid.h.toFixed(5)}</b></span>
+      <span>L <b style="color:var(--down)">${mid.l.toFixed(5)}</b></span>
+      <span>C <b>${mid.c.toFixed(5)}</b></span>
+      <span>V <b>${mid.v}</b></span>
+      <span id="blindChip" style="display:none"></span>
+    `;
+    const chip = document.getElementById('blindChip');
+    if (blind && candles.length) {
+      const c = candles[lastRevealedIdx()];
+      chip.style.display = '';
+      chip.className = 'on';
+      chip.textContent = `🔒 până la ${c ? formatDt(c.t) : ''} — dezvălui cu Play/+1/+10/+60`;
+    } else {
+      chip.style.display = '';
+      chip.className = 'off';
+      chip.textContent = '🔓 tot chart-ul vizibil';
+    }
+  }
+}
+
+// Crosshair
+canvas.addEventListener('mousemove', e => {
+  if (!candles.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const pad = { top: 30, right: 60, bottom: 24, left: 8 };
+  const dW = rect.width;
+  const dH = rect.height;
+  const dcw = dW - pad.left - pad.right;
+  const dch = dH - pad.top - pad.bottom;
+
+  if (mx < pad.left || mx > dW - pad.right || my < pad.top || my > dH - pad.bottom) {
+    crossPrice.style.display = 'none';
+    return;
+  }
+
+  // Calculate price at mouse Y
+  const start = currentIdx;
+  const end = Math.min(start + windowSize, candles.length);
+  const slice = candles.slice(start, end);
+  let pH = -Infinity, pL = Infinity;
+  for (const c of slice) { if (c.h > pH) pH = c.h; if (c.l < pL) pL = c.l; }
+  const margin = (pH - pL) * 0.05 || 0.001;
+  pH += margin; pL -= margin;
+  const priceRange = pH - pL;
+  const price = pL + (1 - (my - pad.top) / dch) * priceRange;
+
+  crossPrice.style.display = 'block';
+  crossPrice.style.top = (my - 8) + 'px';
+  crossPrice.textContent = price.toFixed(5);
+
+  // Crosshair lines
+  draw();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = 'rgba(88,166,255,0.4)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(pad.left, my); ctx.lineTo(dW - pad.right, my); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(mx, pad.top); ctx.lineTo(mx, dH - pad.bottom); ctx.stroke();
+  ctx.setLineDash([]);
+});
+
+canvas.addEventListener('mouseleave', () => { crossPrice.style.display = 'none'; });
+
+// ============================================================
+//  AUTO-RESIZE OBSERVER
+// ============================================================
+new ResizeObserver(() => draw()).observe(document.getElementById('chartWrap'));
+</script>
+</body>
+</html>

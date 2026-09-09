@@ -1,0 +1,11 @@
+trade_id,symbol,date,start_time,end_time,note,done
+39,EURUSD,2026-01-08,13:00,15:10,"Data confirmata explicit pe chart (Thu 08 Jan '26 UTC 13:14) - singura din batch-uri cu data completa; restul de mai jos au DOAR ora aproximativa, fara data - Copilot trebuie sa gaseasca data reala in Jurnal_Trading.csv inainte de folosire",FALSE
+26,NAS100,2026-01-13,08:30,11:45,"Data din merged_full.csv (26.png: nas100 13/01/2026, open 11:55 GMT+2 = 09:55 UTC, WIN) - completeaza data din jurnal (cauta NAS100 + ora ~09-11 + rezultat WIN)",FALSE
+17,GBPUSD,2026-01-02,11:35,12:55,"Data din merged_full.csv (17.png: GBP/USD 02/01/2026 13:47 GMT+2 = 11:47 UTC, RR=2.44 - SL=4.5p TP=11.0p confirma)",FALSE
+35,EURUSD,2026-01-05,17:00,19:15,"Data din merged_full.csv (35.png: EUR/USD 05/01/2026 19:00 GMT+2 = 17:00 UTC, WIN) - A+ setup, trend bullish continuation",FALSE
+58,USDJPY,2026-01-06,16:00,19:00,"Data din merged_full.csv (58.png: 06/01/2026 18:44 GMT+2 = 16:44 UTC) - CONTINE eticheta explicita Invalid pe primul setup; verificare prioritate (batch 5)",FALSE
+70,USDJPY,2026-01-26,18:30,22:00,"Data din merged_full.csv (70.png: USD/JPY 26/01/2026 21:38 GMT+2 = 19:38 UTC) - Addendum_Trade70_1m: singur MSS valid dupa lichiditate majora - prioritate mare",FALSE
+31,NAS100,2026-01-16,08:35,13:00,"Data din merged_full.csv (31.png: nas100 16/01/2026 12:55 GMT+2 = 10:55 UTC, SELL) - Realized PnL -131.94 confirmat de platforma - LOSS cu structura perfecta",FALSE
+41,EURUSD,2026-01-20,08:00,11:30,"Data din merged_full.csv (41.png: EUR/USD 20/01/2026 11:38 GMT+2 = 09:38 UTC, WIN) - Realized PnL +102.88 confirmat de platforma",FALSE
+46,EURUSD,2026-01-23,13:00,17:00,"Data din merged_full.csv (46.png: EUR/USD 23/01/2026 16:22 GMT+2 = 14:22 UTC, WIN) - Realized PnL +591.54, SINGUR MSS (1) - caz limita important",FALSE
+95,NAS100,2025-10-24,16:00,17:00,"Data din merged_full.csv (95.png: nas100 24/10/2025 16:25 GMT+3 = 13:25 UTC, BUY) - marcaj de stiri explicit, LOSS (Deep_Research_Winrate_2026.md: pierdere din stiri)",FALSE
