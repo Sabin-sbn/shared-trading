@@ -18,7 +18,8 @@
 
 # Temporare
 *.tmp
-*.bak
+*.bak*
+   # acopera .bak, .bak2, .bak_<data> (backup-uri de ~58 MB, nu se urca in Git)
 ~$*
 Thumbs.db
 desktop.ini
